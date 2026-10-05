@@ -1,0 +1,782 @@
+:root {
+  --rsu-ink:#111c25;
+  --rsu-panel:#142530;
+  --rsu-steel:#3b4a55;
+  --rsu-ice:#cff1ff;
+  --rsu-olive:#afc5b1;
+  --rsu-danger:#ffab8b;
+  --rsu-muted:#8195a4;
+  font-family:'Segoe UI','Yu Gothic UI',sans-serif;
+  color:#e9eff1;
+  background:var(--rsu-ink);
+  font-synthesis:none
+}
+* {
+  box-sizing:border-box
+}
+body {
+  margin:0;
+  min-height:100vh;
+  background:radial-gradient(ellipse at 55% 30%,#2a3b48,var(--rsu-ink) 80%)
+}
+button,a {
+  -webkit-tap-highlight-color:transparent
+}
+button {
+  font:inherit;
+  cursor:pointer
+}
+button:focus-visible,a:focus-visible {
+  outline:2px solid #c5e5e9;
+  outline-offset:4px
+}
+.shell {
+  width:min(1440px,100%);
+  margin:auto;
+  padding:0 32px
+}
+.masthead {
+  height:72px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center
+}
+.brand {
+  display:flex;
+  align-items:center;
+  gap:14px;
+  text-decoration:none;
+  color:#d8e2e7;
+  font-size:10px;
+  letter-spacing:1.8px
+}
+.brand b {
+  display:block;
+  font-size:9px;
+  font-weight:400;
+  margin-top:3px;
+  color:#8b9ca9;
+  letter-spacing:2.3px
+}
+.brand-mark {
+  font-weight:900;
+  font-size:22px;
+  letter-spacing:-2px;
+  color:#d5e1e3
+}
+.brand-mark span {
+  color:#829d99;
+  font-weight:300
+}
+.meta {
+  display:flex;
+  gap:10px;
+  align-items:center
+}
+.facility-status {
+  color:#8195a4;
+  font-size:9px;
+  letter-spacing:1.8px;
+  margin-right:15px
+}
+.quiet {
+  color:#adc0cb;
+  background:#24384480;
+  border:1px solid #69829433;
+  padding:8px 12px;
+  border-radius:4px;
+  font-size:9px;
+  letter-spacing:1px;
+  transition:background .2s
+}
+.quiet:hover {
+  background:#3d5462
+}
+.arena {
+  position:relative;
+  width:100%;
+  background:#1c2c37;
+  overflow:hidden;
+  border-radius:8px;
+  box-shadow:0 18px 60px #050e1760
+}
+.arena canvas {
+  display:block;
+  width:100%;
+  aspect-ratio:1.75;
+  cursor:crosshair
+}
+.ingame-hud {
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  transition:opacity .3s
+}
+.title-mode .ingame-hud {
+  opacity:0;
+  visibility:hidden
+}
+.hud-corner {
+  position:absolute;
+  background:#142530c7;
+  backdrop-filter:blur(8px);
+  border:1px solid #a0b4c41f;
+  padding:12px 16px;
+  border-radius:6px
+}
+.top-left {
+  top:18px;
+  left:18px
+}
+.overline {
+  font-size:8px;
+  color:#a4b8c5;
+  letter-spacing:1.5px
+}
+.floor-display {
+  font-size:12px;
+  color:#adbec8;
+  margin-top:5px;
+  letter-spacing:1px
+}
+.floor-display strong {
+  font-size:19px;
+  font-weight:500;
+  color:#e1ebef;
+  margin-left:7px
+}
+#sector-name {
+  font-size:8px;
+  color:#92a8b4;
+  letter-spacing:1.5px;
+  margin-top:4px
+}
+.top-right {
+  top:18px;
+  right:18px;
+  display:flex;
+  align-items:center;
+  gap:19px
+}
+.hud-stat {
+  color:#a3b6c3;
+  font-size:8px;
+  letter-spacing:1px
+}
+.hud-stat b {
+  color:#f1f5f6;
+  font-size:16px;
+  font-weight:500;
+  margin-left:7px
+}
+.rounds-label b {
+  color:#d6f2ff
+}
+.exit-status {
+  font-size:8px;
+  font-weight:600;
+  letter-spacing:1px;
+  color:#f7ae99;
+  padding:5px 7px;
+  background:#a6503626;
+  border-radius:3px
+}
+.exit-status.unlocked {
+  color:#c3e6d6;
+  background:#b6e5d526
+}
+.bottom-left {
+  bottom:18px;
+  left:18px
+}
+.vital-label {
+  font-size:8px;
+  letter-spacing:1.5px;
+  color:#a3b6be
+}
+.health {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:8px
+}
+.health-icon {
+  width:22px;
+  height:22px;
+  background:#b6c9b322;
+  border:1px solid #d2e1cb44;
+  display:grid;
+  place-items:center;
+  font-size:19px;
+  color:#d0e1c4;
+  border-radius:3px
+}
+#hp {
+  color:#d9e5cb;
+  font-size:14px
+}
+.health small {
+  font-size:8px;
+  color:#92a6b1;
+  letter-spacing:1px
+}
+.bottom-right {
+  bottom:18px;
+  right:18px;
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:11px;
+  max-width:340px
+}
+.current-weapon {
+  display:flex;
+  flex-direction:column;
+  gap:5px
+}
+.current-weapon strong {
+  font-size:12px;
+  font-weight:500;
+  letter-spacing:.4px
+}
+.weapons {
+  display:flex;
+  gap:4px;
+  pointer-events:auto
+}
+.weapon {
+  width:34px;
+  padding:4px 0;
+  font-size:10px;
+  color:#8dabb9;
+  background:#233c4966;
+  border:1px solid #7c9eb52b;
+  border-radius:4px
+}
+.weapon span {
+  display:block;
+  font-size:7px;
+  margin-top:2px
+}
+.weapon.active {
+  color:#deebd7;
+  border-color:#afc79c99;
+  background:#a9bd9133
+}
+.abilities {
+  display:flex;
+  gap:4px
+}
+.abilities:empty {
+  display:none
+}
+.ability-badge {
+  display:inline-grid;
+  place-items:center;
+  width:26px;
+  height:26px;
+  color:#c7dce4;
+  background:#35505f80;
+  border:1px solid #91b6c42b;
+  border-radius:4px;
+  pointer-events:auto
+}
+.ability-badge svg {
+  width:18px;
+  height:18px
+}
+.underbar {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:16px 3px;
+  color:#718998;
+  font-size:8px;
+  letter-spacing:.5px;
+  gap:10px
+}
+.underbar b {
+  color:#93a6b1;
+  font-weight:400
+}
+.underbar>span>i {
+  font-style:normal;
+  margin:0 10px
+}
+.legend {
+  display:flex;
+  gap:15px;
+  align-items:center
+}
+.legend i {
+  display:inline-block;
+  width:12px;
+  height:2px;
+  background:var(--rsu-ice);
+  vertical-align:middle;
+  margin-right:6px
+}
+.legend .enemy {
+  width:5px;
+  height:5px;
+  background:#ffab8b;
+  transform:rotate(45deg)
+}
+#perf {
+  font:8px Consolas,monospace;
+  color:#6f8796
+}
+.overlay {
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#0e1e29a6;
+  backdrop-filter:blur(5px)
+}
+.overlay:empty {
+  display:none
+}
+.overlay.title {
+  background:linear-gradient(90deg,#10232beb 0%,#142c33db 38%,#19354122 65%,#10273100);
+  backdrop-filter:none;
+  justify-content:flex-start
+}
+.title-panel {
+  margin:0 0 0 7%;
+  max-width:56%;
+  padding-bottom:10px
+}
+.eyebrow {
+  color:#a4bcb7;
+  font-size:9px;
+  font-weight:500;
+  letter-spacing:2px;
+  margin-bottom:20px
+}
+.title-panel .eyebrow {
+  font-size:8px;
+  letter-spacing:2px
+}
+.title-panel .eyebrow>span {
+  display:inline-block;
+  width:20px;
+  height:1px;
+  margin:0 8px 3px 0;
+  background:#afc7ad
+}
+h1 {
+  margin:0;
+  font-size:clamp(30px,4.6vw,65px);
+  line-height:.97;
+  font-weight:850;
+  letter-spacing:-2.5px
+}
+h1>span {
+  color:#afc5b1;
+  font-size:.84em;
+  letter-spacing:-1px
+}
+.title-tagline {
+  font-size:clamp(13px,1.4vw,19px);
+  margin-top:25px;
+  letter-spacing:2px;
+  color:#e1e8e3
+}
+.title-panel p {
+  color:#a6bac3;
+  font-size:11px;
+  line-height:1.9;
+  margin-top:18px
+}
+.primary {
+  border:1px solid #e0e6d922;
+  background:#c1cdb3;
+  color:#1c2b27;
+  padding:14px 23px;
+  border-radius:4px;
+  font-size:10px;
+  font-weight:650;
+  letter-spacing:1.6px;
+  margin:18px 5px 0 0;
+  transition:background .2s,transform .2s
+}
+.primary:hover {
+  background:#e0ead5;
+  transform:translateY(-2px)
+}
+.title-panel .primary {
+  width:215px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:11px;
+  padding:17px 21px;
+  margin-top:30px
+}
+.title-panel .primary span {
+  font-size:19px;
+  font-weight:300
+}
+.secondary {
+  background:#344d5c77;
+  border:1px solid #8da9b83d;
+  color:#bfced6;
+  padding:14px 20px;
+  border-radius:4px;
+  font-size:10px;
+  margin:18px 0 0 5px
+}
+.secondary:hover {
+  background:#4e697a
+}
+.run-meta {
+  display:flex;
+  gap:22px;
+  font-size:8px;
+  letter-spacing:1px;
+  color:#8fa6b1;
+  margin-top:22px
+}
+.title-instructions {
+  color:#7e98a1;
+  font-size:9px;
+  margin-top:30px
+}
+.panel {
+  width:85%;
+  max-width:820px;
+  text-align:center
+}
+.panel h2 {
+  margin:0 0 14px;
+  font-size:clamp(23px,3.8vw,45px);
+  font-weight:600;
+  letter-spacing:-1px;
+  line-height:1.15
+}
+.panel p {
+  color:#adc0ca;
+  font-size:12px;
+  line-height:1.8
+}
+.accent {
+  color:#c4d6bd
+}
+.overlay.dead {
+  background:#14202730;
+  backdrop-filter:none;
+  align-items:flex-start;
+  padding-top:7%
+}
+.overlay.dead .panel {
+  width:54%;
+  max-width:630px;
+  background:#14252de8;
+  border:1px solid #809fb333;
+  border-radius:8px;
+  padding:24px 20px
+}
+.overlay.dead h2 {
+  font-size:clamp(21px,3.4vw,40px)
+}
+.overlay.dead .eyebrow {
+  color:#e4b7a8
+}
+.cards {
+  display:flex;
+  gap:15px;
+  margin-top:30px
+}
+.card {
+  flex:1;
+  text-align:left;
+  padding:26px 22px 20px;
+  color:#e6eef0;
+  background:linear-gradient(145deg,#405561f2,#243c48f2);
+  border:1px solid #b0c5d147;
+  border-radius:8px;
+  transition:transform .2s,border-color .2s,box-shadow .2s
+}
+.card:hover {
+  transform:translateY(-7px);
+  border-color:#c0d3bc;
+  box-shadow:0 12px 25px #08162077
+}
+.card-icon {
+  display:grid;
+  place-items:center;
+  width:45px;
+  height:45px;
+  border-radius:8px;
+  background:#adc5b521;
+  color:#d1e3d8;
+  margin-bottom:27px
+}
+.card-icon svg {
+  width:28px;
+  height:28px
+}
+.card strong {
+  display:block;
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:.2px
+}
+.card p {
+  font-size:10px;
+  min-height:38px;
+  margin-top:9px
+}
+.card-select {
+  display:flex;
+  justify-content:space-between;
+  font-size:8px;
+  color:#acbfb8;
+  letter-spacing:1px;
+  padding-top:20px;
+  border-top:1px solid #acc1ce22;
+  margin-top:17px
+}
+@media(min-width:1450px) {
+  .shell {
+    padding-top:calc((100vh - 890px)/3)
+  }
+}
+@media(max-width:1000px) {
+  .shell {
+    padding:0 16px
+  }
+.masthead {
+    height:58px
+  }
+.facility-status {
+    display:none
+  }
+.hud-corner {
+    padding:9px 11px
+  }
+.top-left {
+    top:12px;
+    left:12px
+  }
+.top-right {
+    top:12px;
+    right:12px;
+    gap:12px
+  }
+.bottom-left {
+    bottom:12px;
+    left:12px
+  }
+.bottom-right {
+    bottom:12px;
+    right:12px
+  }
+.title-panel .eyebrow {
+    font-size:7px
+  }
+.title-tagline {
+    margin-top:17px
+  }
+.title-panel p {
+    font-size:10px
+  }
+.title-panel .primary {
+    margin-top:18px;
+    padding:13px 17px
+  }
+.title-instructions {
+    margin-top:18px
+  }
+.underbar {
+    font-size:7px
+  }
+.underbar>span>i {
+    margin:0 4px
+  }
+.legend {
+    gap:9px
+  }
+.cards {
+    gap:9px;
+    margin-top:20px
+  }
+.card {
+    padding:20px 15px
+  }
+.card-icon {
+    margin-bottom:18px
+  }
+.card strong {
+    font-size:11px
+  }
+.overlay.dead .panel {
+    padding:18px
+  }
+.panel p {
+    font-size:10px
+  }
+}
+@media(max-width:680px) {
+  .shell {
+    padding:0 6px
+  }
+.brand>span:last-child {
+    display:none
+  }
+.masthead {
+    height:46px
+  }
+.quiet {
+    font-size:8px;
+    padding:6px
+  }
+.arena {
+    border-radius:4px
+  }
+.title-panel {
+    margin-left:6%;
+    max-width:63%
+  }
+h1 {
+    font-size:30px;
+    letter-spacing:-1px
+  }
+.title-panel .eyebrow,.title-instructions {
+    display:none
+  }
+.title-tagline {
+    font-size:12px;
+    letter-spacing:0;
+    margin-top:12px
+  }
+.title-panel p {
+    font-size:8px;
+    margin-top:10px
+  }
+.title-panel .primary {
+    width:165px;
+    margin-top:10px;
+    padding:8px 12px
+  }
+.run-meta {
+    font-size:6px;
+    margin-top:12px;
+    gap:10px
+  }
+.hud-corner {
+    padding:6px
+  }
+.top-left {
+    top:6px;
+    left:6px
+  }
+.top-right {
+    top:6px;
+    right:6px;
+    gap:7px
+  }
+.bottom-left {
+    bottom:6px;
+    left:6px
+  }
+.bottom-right {
+    bottom:6px;
+    right:6px;
+    gap:6px
+  }
+.overline,#sector-name,.vital-label {
+    font-size:6px
+  }
+.floor-display {
+    font-size:8px
+  }
+.floor-display strong {
+    font-size:13px
+  }
+.hud-stat {
+    font-size:6px
+  }
+.hud-stat b {
+    font-size:11px;
+    margin-left:3px
+  }
+.health small,.exit-status,.rounds-label {
+    display:none
+  }
+.health {
+    margin-top:3px
+  }
+.current-weapon strong {
+    font-size:9px
+  }
+.weapon {
+    width:24px;
+    font-size:8px
+  }
+.weapon span {
+    font-size:6px
+  }
+.underbar {
+    flex-wrap:wrap;
+    justify-content:center;
+    font-size:7px
+  }
+.card {
+    padding:12px 9px
+  }
+.card-icon {
+    width:30px;
+    height:30px;
+    margin-bottom:10px
+  }
+.card strong {
+    font-size:8px
+  }
+.card p {
+    font-size:7px
+  }
+.card-select {
+    font-size:6px;
+    padding-top:10px
+  }
+.choice-panel .eyebrow {
+    margin-bottom:10px
+  }
+.panel h2 {
+    font-size:19px
+  }
+.cards {
+    gap:5px;
+    margin-top:12px
+  }
+.primary,.secondary {
+    padding:8px 10px;
+    font-size:8px;
+    margin-top:8px
+  }
+.panel p {
+    font-size:8px
+  }
+.overlay.dead .panel {
+    width:70%;
+    padding:12px
+  }
+.overlay.dead h2 {
+    font-size:21px
+  }
+.overlay.dead .eyebrow {
+    font-size:7px;
+    margin-bottom:12px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  button {
+    transition:none!important
+  }
+.card:hover,.primary:hover {
+    transform:none
+  }
+}

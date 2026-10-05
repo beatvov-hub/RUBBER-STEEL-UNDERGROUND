@@ -1,0 +1,32 @@
+import { chromium, expect } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+await mkdir('artifacts', { recursive: true });
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1060 } });
+const errors = []; page.on('pageerror', e => errors.push(e.message));
+await page.goto(process.env.RSU_TEST_URL ?? 'http://127.0.0.1:5174');
+await page.locator('#start').click();
+await page.screenshot({ path: 'artifacts/gameplay.png', fullPage: true });
+const rect = await page.locator('#game').boundingBox();
+const pos = (x,y) => ({ x: rect.x + x/1120*rect.width, y: rect.y + y/640*rect.height });
+// Fire one carefully aimed shot. Basic pursuer moves towards us on the same line.
+const enemy = pos(800,170); await page.mouse.move(enemy.x, enemy.y); await page.mouse.down(); await page.waitForTimeout(60); await page.mouse.up();
+await page.waitForTimeout(2200);
+assert.equal(await page.locator('#enemies').textContent(), '00');
+assert.equal(await page.locator('#exit').textContent(), 'OPEN');
+// Miss a horizontal shot and stay in its return path to verify the actual UI death loop.
+const aim = pos(850,520); await page.mouse.move(aim.x, aim.y); await page.mouse.down(); await page.waitForTimeout(60); await page.mouse.up();
+await page.waitForTimeout(5700);
+assert.ok(await page.locator('#retry').isVisible());
+assert.match(await page.locator('#overlay').textContent(), /OWN BULLET/);
+await page.screenshot({ path: 'artifacts/own-bullet-death.png', fullPage: true });
+await page.locator('#retry').click(); await expect(page.locator('#rounds')).toHaveText('000');
+await page.keyboard.press('Escape'); assert.ok(await page.locator('#resume').isVisible());
+await page.locator('#resume').click();
+await page.locator('[data-weapon="triple"]').click(); await page.waitForTimeout(100); assert.equal(await page.locator('#weapon').textContent(),'TRIPLE SHOT');
+await page.locator('#sound').click(); await page.reload(); assert.equal(await page.locator('#sound').textContent(),'SOUND OFF');
+await page.setViewportSize({width:1000,height:800});await page.screenshot({path:'artifacts/title.png',fullPage:true});
+assert.deepEqual(errors, []);
+console.log('Browser smoke PASS: aimed kill, exit unlock, delayed own-bullet death, retry, pause, weapon switch, settings persistence.');
+await browser.close();
