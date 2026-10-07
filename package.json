@@ -1,8 +1,8 @@
 {
   "name": "rubber-steel-underground",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Permanent ricochet action roguelite / Stage 1 prototype",
+  "description": "Permanent ricochet action roguelite / 50 stages and 500 floors",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -14,7 +14,9 @@
     "package:win": "npm run build && node node_modules/electron/install.js && electron-builder --win zip",
     "test:playthrough": "tsx scripts/playthrough.ts",
     "test:browser": "node scripts/smoke.mjs",
-    "test:desktop": "node scripts/desktop-smoke.mjs"
+    "test:desktop": "node scripts/desktop-smoke.mjs",
+    "test:debug": "node scripts/debug-smoke.mjs",
+    "verify:content": "tsx scripts/verify-content.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

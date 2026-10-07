@@ -1,10 +1,10 @@
-import type { Weapon, Vec } from '../data';
+import type { CharacterId, Weapon, Vec } from '../data';
 
 /** Renderer contract: replace this function with a sprite-sheet adapter without touching physics. */
 export type SoldierLook = {
   position: Vec; aim: number; move: Vec; time: number; running: boolean;
   role: 'player' | 'basic' | 'shooter' | 'armored' | 'boss';
-  accent?: string; armor?: boolean; weapon?: Weapon; recoil?: number; hit?: number; death?: number;
+  accent?: string; character?: CharacterId; armor?: boolean; weapon?: Weapon; recoil?: number; hit?: number; death?: number;
 };
 export function shape(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill: string, stroke?: string) {
   ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill();
@@ -19,7 +19,7 @@ export function drawSoldier(ctx: CanvasRenderingContext2D, look: SoldierLook) {
   const scale = role === 'boss' ? 1.85 : heavy ? 1.15 : 1;
   const player = role === 'player';
   const accent = look.accent ?? (player ? '#dce5cc' : role === 'armored' && look.armor ? '#a9d5e3' : '#ef836c');
-  const olive = player ? '#68775b' : heavy ? '#555e66' : '#775652';
+  const olive = player ? look.character==='fire'?'#745649':look.character==='ice'?'#58717a':look.character==='thunder'?'#6b6951':'#68775b' : heavy ? '#555e66' : '#775652';
   const dead = look.death ?? 0;
   ctx.save(); ctx.translate(p.x,p.y);
   // Small soft ground contact shadow, independent of aim and limb movement.
@@ -41,11 +41,17 @@ export function drawSoldier(ctx: CanvasRenderingContext2D, look: SoldierLook) {
   ctx.translate(-Math.cos(aim)*(look.recoil??0)*1.3,bob-Math.sin(aim)*(look.recoil??0)*1.3);
   // Backpack and vest are large readable color masses, not tiny camouflage noise.
   shape(ctx,-11,-3,22,19,5,'#18252b','#34454d');
+  if(player&&look.character==='fire'){shape(ctx,-15,-2,7,17,3,'#553b35',accent);shape(ctx,-16,2,3,11,1,'#a96149');}
+  if(player&&look.character==='ice'){shape(ctx,-15,-5,8,18,3,'#2e505c',accent);shape(ctx,-17,1,3,9,1,'#9ed7ef');}
+  if(player&&look.character==='thunder'){shape(ctx,-15,-4,8,19,3,'#4e4d3d',accent);shape(ctx,-16,-7,3,7,1,accent);}
   if(role==='shooter') { shape(ctx,-13,-5,8,20,3,'#414952','#76838a');ctx.strokeStyle='#778790';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-10,-7);ctx.lineTo(-12,-29);ctx.stroke();ellipse(ctx,-12,-29,1.5,1.5,'#ec8d73'); }
   shape(ctx,-9,-1,18,15,4,olive,'#8d9a88');
   shape(ctx,-6,2,12,9,2,'#39463d');
   shape(ctx,-7,8,5,5,1,'#899078');shape(ctx,2,8,5,5,1,'#899078');
   shape(ctx,-8,0,16,2,1,accent);
+  if(player&&look.character==='fire'){shape(ctx,-16,-1,7,10,3,'#ad6750',accent);shape(ctx,9,-1,7,10,3,'#ad6750',accent);}
+  if(player&&look.character==='ice'){shape(ctx,-14,-2,5,12,2,'#87baca',accent);shape(ctx,9,-2,5,12,2,'#87baca',accent);}
+  if(player&&look.character==='thunder'){shape(ctx,-15,-2,6,10,2,'#b8a663',accent);shape(ctx,9,-2,6,10,2,'#b8a663',accent);}
   if(heavy){
     shape(ctx,-16,-1,8,11,3,'#7a878e','#b1c0c7');shape(ctx,8,-1,8,11,3,'#7a878e','#b1c0c7');
     if(look.armor){shape(ctx,-10,1,20,13,3,'#91a5b2','#d0e6ed');shape(ctx,-8,4,16,3,1,'#d0e8ee');shape(ctx,-2,1,4,13,1,'#526775');}
@@ -59,6 +65,9 @@ export function drawSoldier(ctx: CanvasRenderingContext2D, look: SoldierLook) {
   shape(ctx,-9,-14,18,5,2,'#101f28','#51656b');
   shape(ctx,Math.cos(aim)*3-5,-13,10,2,1,accent);
   shape(ctx,-3,-25,6,5,1,'#b7c2b4');shape(ctx,-2,-24,4,2,1,accent);
+  if(player&&look.character==='fire'){shape(ctx,-8,-26,16,3,1,'#ad6750');shape(ctx,-4,-28,8,3,1,accent);}
+  if(player&&look.character==='ice'){shape(ctx,-12,-21,24,5,2,'#8ebdcc');shape(ctx,-9,-14,18,4,2,'#c5eff5');}
+  if(player&&look.character==='thunder'){shape(ctx,-2,-31,4,7,1,accent);ellipse(ctx,0,-32,2,2,'#fff1b4');}
   shape(ctx,-13,-16,4,9,2,'#222e33');shape(ctx,9,-16,4,9,2,'#222e33');
   if(role==='basic'){shape(ctx,-5,-4,10,3,1,'#b96958');}
   // Aim rotation is confined to arms and weapon, preserving a readable upright head.
@@ -76,6 +85,9 @@ export function drawSoldier(ctx: CanvasRenderingContext2D, look: SoldierLook) {
     shape(ctx,2-kick,-3,18,7,2,'#2b3d46','#9baeb2');shape(ctx,17-kick,-2,length-17,4,1,'#8b9ea6');shape(ctx,8-kick,3,5,7,1,'#182b34');shape(ctx,9-kick,-5,5,3,1,'#b1c3c6');shape(ctx,length-kick-2,-3,3,6,1,'#23343d');
     if(role==='shooter')ellipse(ctx,length-3-kick,0,2,1.5,'#f58869');
   }
+  if(player&&look.character==='fire')shape(ctx,16-kick,-5,9,2,1,accent);
+  if(player&&look.character==='ice')shape(ctx,20-kick,-5,7,2,1,accent);
+  if(player&&look.character==='thunder'){shape(ctx,19-kick,-6,6,2,1,accent);shape(ctx,19-kick,4,6,2,1,accent);}
   if((look.recoil??0)>.45){ctx.fillStyle='#fff1c8';ctx.beginPath();ctx.moveTo(29,-3);ctx.lineTo(40,0);ctx.lineTo(29,4);ctx.lineTo(32,0);ctx.closePath();ctx.fill();}
   ctx.restore();
   if((look.hit??0)>0){ctx.globalAlpha=Math.min(.7,look.hit!);ctx.fillStyle='#fff0e9';ctx.beginPath();ctx.ellipse(0,-4,13,20,0,0,Math.PI*2);ctx.fill();}

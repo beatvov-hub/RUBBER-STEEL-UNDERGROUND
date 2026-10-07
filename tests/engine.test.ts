@@ -26,7 +26,7 @@ test('armor reflects the first shot and breaks, second hit kills; heavy also ref
 });
 test('triple miss leaves all three rounds and population cap rejects entire volley', () => {
   const g=sandbox();g.weapon='triple';g.cooldown=0;g.shoot({x:850,y:120});g.player.x=210;g.player.y=540;step(g,.5);assert.equal(g.bullets.length,3);
-  while(g.bullets.length<CONFIG.maxBullets-2)g.addBullet(600,240,0,'player');g.cooldown=0;const count=g.bullets.length;g.shoot({x:850,y:120});assert.equal(g.bullets.length,count);assert.match(g.message,/CAPACITY/);
+  while(g.bullets.length<CONFIG.maxBullets-2)g.addBullet(600,240,0,'player');g.cooldown=0;const count=g.bullets.length;g.shoot({x:850,y:120});assert.equal(g.bullets.length,count);assert.match(g.message,/BULLET LIMIT/);
 });
 test('exit remains locked while enemies live; enemy clearance does not clear rounds',()=>{
   const g=new Game();g.start();g.player={...g.exit,hp:1};g.update(CONFIG.fixedStep);assert.equal(g.floor,0);
@@ -36,7 +36,7 @@ test('exit remains locked while enemies live; enemy clearance does not clear rou
 test('all ten floors and four ability selections advance to victory',()=>{
   const g=new Game();g.start();let selections=0;
   for(let f=0;f<10;f++){assert.equal(g.floor,f);g.enemies=[];g.player={...g.exit,hp:1};g.update(CONFIG.fixedStep);if(g.state==='choice'){assert.equal(g.choices.length,3);assert.equal(new Set(g.choices).size,3);g.choose(g.choices[0]);selections++;}}
-  assert.equal(g.state,'won');assert.equal(selections,4);assert.equal(g.abilities.length,4);
+  assert.equal(g.state,'stage-clear');assert.equal(selections,4);assert.equal(g.abilities.length,4);
 });
 test('each modifier preserves player vulnerability and indefinite reflection',()=>{
   for(const a of ABILITIES){const g=sandbox();g.abilities=[a.id];const b=g.addBullet(400,240,0,'player',true)!;step(g,500);assert.ok(b.reflections>100);assert.equal(g.bullets.length,1);g.player.x=b.x;g.player.y=b.y;g.update(CONFIG.fixedStep);assert.equal(g.state,'dead');}

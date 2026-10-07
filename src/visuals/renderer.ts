@@ -1,4 +1,5 @@
-import { CONFIG, type Vec, type Rect } from '../data';
+import { CHARACTERS, CONFIG, type Vec, type Rect } from '../data';
+import { STAGES } from '../world';
 import type { Game, Enemy, Effect } from '../engine';
 import { drawSoldier, shape } from './soldier';
 
@@ -18,18 +19,19 @@ export class Renderer {
   private oldRemaining=1;private oldPlayer?:object;private camera={x:0,y:0};private shake=0;
   private glow:HTMLCanvasElement;private redGlow:HTMLCanvasElement;
   lastRenderMs=0;
+  shakeScale=1; flashScale=1; debugHitboxes=false;
   constructor(private ctx:CanvasRenderingContext2D){this.floorCanvas.width=CONFIG.width;this.floorCanvas.height=CONFIG.height;this.glow=this.makeGlow('150,225,249');this.redGlow=this.makeGlow('255,127,90');}
   screenToWorld(point:Vec):Vec{return{x:point.x-this.camera.x,y:point.y-this.camera.y};}
   get cameraOffset(){return {...this.camera};}
   private makeGlow(rgb:string){const c=document.createElement('canvas');c.width=64;c.height=64;const ctx=c.getContext('2d')!;const g=ctx.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,`rgba(${rgb},.4)`);g.addColorStop(.3,`rgba(${rgb},.12)`);g.addColorStop(1,`rgba(${rgb},0)`);ctx.fillStyle=g;ctx.fillRect(0,0,64,64);return c;}
   event(kind:string,game:Game,aim:Vec){
-    if(kind==='shot'){
+    if(kind==='shot'||kind==='heavy'||kind==='triple'){
       this.recoil=1;this.shake=game.weapon==='heavy'?1.5:.4;
       const angle=Math.atan2(aim.y-game.player.y,aim.x-game.player.x);
       this.emit(game.player.x+Math.cos(angle)*25,game.player.y+Math.sin(angle)*25,3,'spark','#ffe8b2',70,.13);
       this.particles.push({x:game.player.x+Math.cos(angle+1)*12,y:game.player.y+Math.sin(angle+1)*12,vx:Math.cos(angle+1.4)*65,vy:Math.sin(angle+1.4)*65,life:.65,max:.65,color:'#c6ae7a',size:2.5,kind:'case'});
     }
-    if(kind==='dead'){this.deathTime=0;this.playerMotion.flash=1;this.shake=1.6;}
+    if(kind==='gameover'){this.deathTime=0;this.playerMotion.flash=1;this.shake=1.6;}
   }
   private emit(x:number,y:number,count:number,kind:Particle['kind'],color:string,speed:number,life:number){
     for(let i=0;i<count && this.particles.length<160;i++){const a=hash(x+i*12,this.time*100)*Math.PI*2;this.particles.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,life,max:life,color,size:kind==='plate'?4:kind==='dust'?2:1.5,kind});}
@@ -50,15 +52,32 @@ export class Renderer {
       if(r.w>80)this.label(ctx,'RS / 09',r.x+14,r.y+25,'#8fabb4',9);
     }
   }
+  private hazards(game:Game){const ctx=this.ctx;for(const h of game.hazards){const r=h.rect;
+    if(h.source.type==='collapse'){
+      ctx.fillStyle=h.active?'#08151d':h.warning?(Math.sin(this.time*10)>0?'#bd715b99':'#a8875766'):'#172c3588';ctx.fillRect(r.x,r.y,r.w,r.h);
+      ctx.strokeStyle=h.active?'#ec997e':h.warning?'#ffbf75':'#658490';ctx.lineWidth=h.warning?3:2;ctx.strokeRect(r.x+2,r.y+2,r.w-4,r.h-4);
+      if(h.active){ctx.strokeStyle='#7aa6b966';ctx.beginPath();ctx.moveTo(r.x+7,r.y+7);ctx.lineTo(r.x+r.w-7,r.y+r.h-7);ctx.moveTo(r.x+r.w-7,r.y+7);ctx.lineTo(r.x+7,r.y+r.h-7);ctx.stroke();}
+      else if(h.warning){this.label(ctx,`DROP ${Math.max(1,Math.ceil((1-h.progress)*h.source.warningSeconds))}`,r.x+r.w/2,r.y+r.h/2+4,'#ffe2bc',10,'center');}
+      else this.label(ctx,'FRAGILE',r.x+r.w/2,r.y+r.h/2+4,'#8eb0ba',8,'center');
+    } else {
+      const e=h.source.rect,span=h.source.span??0;
+      ctx.strokeStyle='#e4aa8066';ctx.setLineDash([6,5]);ctx.strokeRect(e.x-(h.source.axis==='x'?span:0)-3,e.y-(h.source.axis==='y'?span:0)-3,e.w+(h.source.axis==='x'?span*2:0)+6,e.h+(h.source.axis==='y'?span*2:0)+6);ctx.setLineDash([]);
+      if(h.warning){ctx.fillStyle='#d99b5c77';ctx.fillRect(r.x,r.y,r.w,r.h);this.label(ctx,'SHUTTER',r.x+r.w/2,r.y-8,'#ffd6ac',9,'center');}
+      else{this.steel(ctx,r);ctx.strokeStyle='#e8b78b';ctx.lineWidth=3;ctx.strokeRect(r.x+2,r.y+2,r.w-4,r.h-4);}
+    }
+  }}
   private bakeFloor(game:Game){
     const ctx=this.floorCanvas.getContext('2d')!,b=game.layout.bounds;
+    const area=STAGES[game.stage-1].area;
+    const tones:[[number,number,number],...[number,number,number][]]=[[53,66,77],[67,62,60],[54,62,82],[68,57,65],[44,54,73]];
+    const base=tones[area];
     ctx.fillStyle='#101b25';ctx.fillRect(0,0,1120,640);
     // Surrounding facility depth, not a colored frame around the arena.
     for(let y=0;y<640;y+=80)for(let x=0;x<1120;x+=80){ctx.fillStyle=(x+y)%160?'#17242e':'#15222c';ctx.fillRect(x+1,y+1,78,78);}
     this.softLight(ctx,550,280,650,'#7996a219');
     ctx.save();ctx.beginPath();ctx.rect(b.x,b.y,b.w,b.h);ctx.clip();
-    ctx.fillStyle='#3b4a55';ctx.fillRect(b.x,b.y,b.w,b.h);
-    for(let y=b.y;y<b.y+b.h;y+=80)for(let x=b.x;x<b.x+b.w;x+=96){const light=Math.floor(hash(x,y)*8);ctx.fillStyle=`rgb(${53+light},${66+light},${77+light})`;ctx.fillRect(x+1,y+1,94,78);ctx.fillStyle='#80919b28';ctx.fillRect(x+2,y+2,92,1);ctx.fillStyle='#111f2a77';ctx.fillRect(x+1,y+78,94,1);
+    ctx.fillStyle=STAGES[game.stage-1].palette.floor;ctx.fillRect(b.x,b.y,b.w,b.h);
+    for(let y=b.y;y<b.y+b.h;y+=80)for(let x=b.x;x<b.x+b.w;x+=96){const light=Math.floor(hash(x,y)*8);ctx.fillStyle=`rgb(${base[0]+light},${base[1]+light},${base[2]+light})`;ctx.fillRect(x+1,y+1,94,78);ctx.fillStyle='#80919b28';ctx.fillRect(x+2,y+2,92,1);ctx.fillStyle='#111f2a77';ctx.fillRect(x+1,y+78,94,1);
       if(hash(x,y)>.4){ctx.fillStyle='#1f303b';ctx.fillRect(x+8,y+8,2,2);ctx.fillRect(x+85,y+68,2,2);}
     }
     // Low-contrast, static wear. Geometry is cached once per floor.
@@ -69,7 +88,7 @@ export class Renderer {
     ctx.strokeStyle='#1f303b';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(b.x+40,b.y+25);ctx.lineTo(b.x+240,b.y+25);ctx.quadraticCurveTo(b.x+255,b.y+25,b.x+255,b.y+47);ctx.lineTo(b.x+255,b.y+65);ctx.stroke();
     // Painted caution markers are localized; the center stays quiet for bullets.
     for(const p of[game.entry,game.exit]){ctx.save();ctx.translate(p.x,p.y);ctx.fillStyle='#e2c27360';for(let i=-3;i<4;i++){ctx.save();ctx.translate(i*9,36);ctx.rotate(-.5);ctx.fillRect(-2,-3,4,9);ctx.restore();}ctx.restore();}
-    this.label(ctx,`0${game.floor+1}`,b.x+b.w/2,b.y+b.h/2+20,'#9babb91b',100,'center');
+    this.label(ctx,`${String(game.stage).padStart(2,'0')}/${String(game.floor+1).padStart(2,'0')}`,b.x+b.w/2,b.y+b.h/2+20,'#9babb91b',80,'center');
     this.label(ctx,game.layout.name,b.x+b.w/2,b.y+b.h/2+45,'#c5d5db22',12,'center');
     this.label(ctx,'BALLISTIC RESEARCH / RESTRICTED',b.x+75,b.y+30,'#adbdc154',9);
     // A few broad ceiling pools give depth without concealing targets in darkness.
@@ -129,34 +148,35 @@ export class Renderer {
     if(this.oldRemaining>0&&!game.remaining){this.unlockBanner=2.1;}
     this.oldRemaining=game.remaining;this.unlockBanner=Math.max(0,this.unlockBanner-animDt);
     this.openProgress=clamp(this.openProgress+(game.remaining?-animDt:animDt)*1.8,0,1);
-    const key=String(game.floor);if(key!==this.floorKey){this.floorKey=key;this.bakeFloor(game);}
+    const key=`${game.stage}:${game.floor}`;if(key!==this.floorKey){this.floorKey=key;this.bakeFloor(game);}
     const p=game.player,m=this.playerMotion;const dx=p.x-m.x,dy=p.y-m.y;m.speed=Math.hypot(dx,dy)/Math.max(.001,dt);if(m.speed>1)m.angle=Math.atan2(dy,dx);m.x=p.x;m.y=p.y;
     if(game.state==='dead'){this.deathTime+=dt;m.death=clamp(this.deathTime,0,1);m.flash=Math.max(0,1-this.deathTime*5);}else m.death=0;
     // Camera is a presentation-only 2px follow. Pointer input applies the inverse transform.
     const title=game.state==='title';const targetX=title?0:clamp((560-p.x)*.005,-2,2),targetY=title?0:clamp((320-p.y)*.005,-2,2);
     this.camera.x+=(targetX-this.camera.x)*(1-Math.exp(-dt*5));this.camera.y+=(targetY-this.camera.y)*(1-Math.exp(-dt*5));
     ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#14232d';ctx.fillRect(0,0,1120,640);
-    ctx.save();ctx.translate(this.camera.x+Math.sin(this.time*110)*this.shake*.3,this.camera.y+Math.cos(this.time*93)*this.shake*.3);
-    ctx.drawImage(this.floorCanvas,0,0);this.gate(game,false);this.gate(game,true);
+    ctx.save();ctx.translate(this.camera.x+Math.sin(this.time*110)*this.shake*.3*this.shakeScale,this.camera.y+Math.cos(this.time*93)*this.shake*.3*this.shakeScale);
+    ctx.drawImage(this.floorCanvas,0,0);this.hazards(game);this.gate(game,false);this.gate(game,true);
     if(title)this.titleScene();else{
       const sorted=[...game.enemies].sort((a,b)=>a.y-b.y);
       for(const e of sorted){const motion=this.motion(e,animDt);if(e.hp<=0&&motion.death>.65)continue;
         drawSoldier(ctx,{position:e,aim:Math.atan2(p.y-e.y,p.x-e.x),move:{x:Math.cos(motion.angle),y:Math.sin(motion.angle)},time:this.time,running:motion.speed>1&&active,role:e.type,armor:e.armor,hit:e.hit*4,death:e.hp<=0?motion.death:0});
-        if(e.type==='boss'&&e.hp>0){shape(ctx,e.x-40,e.y-61,80,4,2,'#203541');shape(ctx,e.x-40,e.y-61,80*e.hp/18,4,2,'#e59a87');this.label(ctx,'THE REFLECTOR',e.x,e.y-68,'#eac6b9',10,'center');}}
+        if(e.type==='boss'&&e.hp>0){shape(ctx,e.x-40,e.y-61,80,4,2,'#203541');shape(ctx,e.x-40,e.y-61,80*e.hp/game.bossSpec.hp,4,2,'#e59a87');this.label(ctx,game.stage%10===0?game.bossSpec.name:'ELITE REFLECTOR',e.x,e.y-68,'#eac6b9',10,'center');if(e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(e.x,e.y,43+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();}}}
       // A precise faint footprint keeps collision location readable under the taller soldier.
       ctx.strokeStyle='#e2e9db44';ctx.lineWidth=1;ctx.beginPath();ctx.arc(p.x,p.y,CONFIG.playerRadius,0,Math.PI*2);ctx.stroke();
-      drawSoldier(ctx,{position:p,aim:Math.atan2(aim.y-p.y,aim.x-p.x),move:{x:Math.cos(m.angle),y:Math.sin(m.angle)},time:this.time,running:m.speed>2&&active,role:'player',weapon:game.weapon,recoil:this.recoil,hit:m.flash,death:m.death});
+      drawSoldier(ctx,{position:p,aim:Math.atan2(aim.y-p.y,aim.x-p.x),move:{x:Math.cos(m.angle),y:Math.sin(m.angle)},time:this.time,running:m.speed>2&&active,role:'player',character:game.character,accent:CHARACTERS[game.character].accent,weapon:game.weapon,recoil:this.recoil,hit:m.flash*this.flashScale,death:m.death});
       for(const b of game.bullets)this.bullet(b);
       this.observeEffects(game);
     }
-    for(const impact of this.impacts){impact.life-=animDt;if(impact.life<=0)continue;ctx.globalAlpha=impact.life/impact.max;ctx.drawImage(this.glow,impact.x-30,impact.y-30,60,60);ctx.strokeStyle='#d0f4ff';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(impact.x,impact.y);ctx.lineTo(impact.x+Math.cos(impact.direction)*34,impact.y+Math.sin(impact.direction)*34);ctx.stroke();if(impact.armor){this.label(ctx,'CLANG / ARMOR BREAK',impact.x,impact.y-34,'#d5f0f8',10,'center');}ctx.globalAlpha=1;}
+    for(const impact of this.impacts){impact.life-=animDt;if(impact.life<=0)continue;ctx.globalAlpha=impact.life/impact.max*this.flashScale;ctx.drawImage(this.glow,impact.x-30,impact.y-30,60,60);ctx.strokeStyle='#d0f4ff';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(impact.x,impact.y);ctx.lineTo(impact.x+Math.cos(impact.direction)*34,impact.y+Math.sin(impact.direction)*34);ctx.stroke();if(impact.armor){this.label(ctx,'CLANG / ARMOR BREAK',impact.x,impact.y-34,'#d5f0f8',10,'center');}ctx.globalAlpha=1;}
     this.impacts=this.impacts.filter(e=>e.life>0);
-    for(const part of this.particles){part.life-=animDt;part.x+=part.vx*animDt;part.y+=part.vy*animDt;part.vx*=Math.exp(-animDt*4);part.vy*=Math.exp(-animDt*4);ctx.globalAlpha=clamp(part.life/part.max,0,1);ctx.fillStyle=part.color;
+    for(const part of this.particles){part.life-=animDt;part.x+=part.vx*animDt;part.y+=part.vy*animDt;part.vx*=Math.exp(-animDt*4);part.vy*=Math.exp(-animDt*4);ctx.globalAlpha=clamp(part.life/part.max,0,1)*this.flashScale;ctx.fillStyle=part.color;
       if(part.kind==='spark'){ctx.strokeStyle=part.color;ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(part.x,part.y);ctx.lineTo(part.x-part.vx*.035,part.y-part.vy*.035);ctx.stroke();}
       else{ctx.save();ctx.translate(part.x,part.y);ctx.rotate(part.life*5);ctx.fillRect(-part.size/2,-part.size/2,part.size,part.kind==='case'?1.2:part.size);ctx.restore();}}
     ctx.globalAlpha=1;this.particles=this.particles.filter(p=>p.life>0);
     if(active){ctx.strokeStyle='#e7f4f3';ctx.lineWidth=1;ctx.beginPath();ctx.arc(aim.x,aim.y,6,0,Math.PI*2);for(let i=0;i<4;i++){const a=i*Math.PI/2;ctx.moveTo(aim.x+Math.cos(a)*9,aim.y+Math.sin(a)*9);ctx.lineTo(aim.x+Math.cos(a)*13,aim.y+Math.sin(a)*13);}ctx.stroke();}
     if(game.fatalBullet&&game.state==='dead'){const b=game.fatalBullet;ctx.strokeStyle='#f9e2db';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(b.x,b.y,23,0,Math.PI*2);ctx.stroke();this.label(ctx,'FATAL ROUND',b.x,b.y+36,'#ffdfd5',10,'center');}
+    if(this.debugHitboxes){ctx.save();ctx.strokeStyle='#62f2c9';ctx.lineWidth=1;ctx.beginPath();ctx.arc(p.x,p.y,CONFIG.playerRadius,0,Math.PI*2);for(const e of game.enemies)if(e.hp>0){ctx.moveTo(e.x+e.radius,e.y);ctx.arc(e.x,e.y,e.radius,0,Math.PI*2);}ctx.stroke();ctx.strokeStyle='#ffe27b';for(const b of game.bullets){ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,Math.PI*2);ctx.stroke();}ctx.strokeStyle='#ff7c7c';for(const h of game.hazards)ctx.strokeRect(h.rect.x,h.rect.y,h.rect.w,h.rect.h);ctx.restore();}
     ctx.restore();
     if(this.unlockBanner>0&&!title){ctx.globalAlpha=Math.min(1,this.unlockBanner*2);shape(ctx,425,280,270,62,8,'#12262de8','#a9d9c744');this.label(ctx,'EXIT UNLOCKED',560,307,'#cdece0',18,'center');this.label(ctx,'残った跳弾に注意して、出口へ',560,327,'#b9ccc9',10,'center');ctx.globalAlpha=1;}
     if(game.messageTime>0&&active&&!this.unlockBanner){const message=game.message.startsWith('EXIT OPEN')?'EXIT UNLOCKED — 残った自弾に注意':game.message;shape(ctx,330,566,460,27,5,'#13242bdd');this.label(ctx,message,560,584,'#c5d6dc',11,'center');}
