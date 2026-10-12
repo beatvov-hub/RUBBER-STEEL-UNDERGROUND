@@ -5,6 +5,8 @@ import { Renderer } from './visuals/renderer';
 import { abilityIcon, ABILITY_SUMMARIES } from './visuals/icons';
 import { completeStage, loadSave, persistSave } from './save';
 import { seedOf, STAGES } from './world';
+import mainBgmUrl from './assets/audio/RSU-main.mp3';
+import bossBgmUrl from './assets/audio/RSU-boss.mp3';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const game = new Game();
 const WEAPON_HINTS:Record<Weapon,string>={standard:'精密単発',triple:'3方向 / 集団向け',heavy:'高威力 / 装甲・ボス'};
@@ -12,14 +14,21 @@ let save = loadSave(localStorage);
 let menu: 'home'|'stages'|'characters'|'settings'|'credits' = 'home';
 let recordedDeath=false,recordedClear='';
 function persist() { persistSave(localStorage,save); }
-app.innerHTML = "<main class=\"shell\"><header class=\"masthead\"><a class=\"brand\" href=\"#\" aria-label=\"RSU\"><span class=\"brand-mark\">R<span>/</span>S</span><span>RUBBER STEEL <b>UNDERGROUND</b></span></a><div class=\"meta\"><span class=\"facility-status\">SECTOR 01 · LOCAL SIMULATION</span><button class=\"quiet\" id=\"sound\">SOUND ON</button><button class=\"quiet\" id=\"pause\">PAUSE Ⅱ</button></div></header><div class=\"arena\"><canvas width=\"1120\" height=\"640\" id=\"game\" aria-label=\"RSU 見下ろし型アクションゲーム\"></canvas><div class=\"ingame-hud\"><div class=\"hud-corner top-left\"><div class=\"overline\">UNDERGROUND / STAGE 01</div><div class=\"floor-display\">FLOOR <strong id=\"floor\">01 / 10</strong></div><div id=\"sector-name\">CALIBRATION BAY</div></div><div class=\"hud-corner top-right\"><span class=\"hud-stat\">ENEMIES <b id=\"enemies\">01</b></span><span class=\"hud-stat rounds-label\">LIVE ROUNDS <b id=\"rounds\">000</b></span><span class=\"exit-status\" id=\"exit\">LOCKED</span></div><div class=\"hud-corner bottom-left\"><div class=\"vital-label\">VITAL / STANDARD</div><div class=\"health\"><span class=\"health-icon\">+</span><span id=\"hp\">◆</span><small>ONE LIFE</small></div></div><div class=\"hud-corner bottom-right\"><div class=\"current-weapon\"><span class=\"overline\">EQUIPPED</span><strong id=\"weapon\">STANDARD</strong><small id=\"weapon-hint\">精密単発</small></div><div class=\"weapons\"><button class=\"weapon active\" data-weapon=\"standard\" aria-label=\"1 STANDARD: 精密な単発射撃\" title=\"1 STANDARD: 精密な単発射撃\">1<span>STD</span></button><button class=\"weapon \" data-weapon=\"triple\" aria-label=\"2 TRIPLE SHOT: 3方向で集団向け。外した3発も跳ね返る\" title=\"2 TRIPLE SHOT: 3方向で集団向け。外した3発も跳ね返る\">2<span>TRI</span></button><button class=\"weapon \" data-weapon=\"heavy\" aria-label=\"3 HEAVY SHOT: 高威力の重弾。装甲とボスに有効だが弾速は遅い\" title=\"3 HEAVY SHOT: 高威力の重弾。装甲とボスに有効だが弾速は遅い\">3<span>HVY</span></button></div><div class=\"abilities\" id=\"abilities\"></div></div></div><div class=\"overlay\" id=\"overlay\"></div></div><div class=\"underbar\"><span>WASD / 矢印 <b>移動</b> <i>·</i> MOUSE <b>照準</b> <i>·</i> CLICK <b>射撃</b> <i>·</i> ESC <b>一時停止</b></span><div class=\"legend\"><span><i class=\"own\"></i>自弾 / 永久跳弾</span><span><i class=\"enemy\"></i>敵弾</span><small id=\"perf\">RSU / v1.0.0</small></div></div></main>";
+app.innerHTML = "<main class=\"shell\"><header class=\"masthead\"><a class=\"brand\" href=\"#\" aria-label=\"RSU\"><span class=\"brand-mark\">R<span>/</span>S</span><span>RUBBER STEEL <b>UNDERGROUND</b></span></a><div class=\"meta\"><span class=\"facility-status\">SECTOR 01 · LOCAL SIMULATION</span><button class=\"quiet\" id=\"sound\">SOUND ON</button><button class=\"quiet\" id=\"pause\">PAUSE Ⅱ</button></div></header><div class=\"arena\"><canvas width=\"1120\" height=\"640\" id=\"game\" aria-label=\"RSU 見下ろし型アクションゲーム\"></canvas><div class=\"touch-stick\" id=\"touch-stick\" aria-hidden=\"true\"><span></span></div><div class=\"ingame-hud\"><div class=\"hud-corner top-left\"><div class=\"overline\">UNDERGROUND / STAGE 01</div><div class=\"floor-display\">FLOOR <strong id=\"floor\">01 / 10</strong></div><div id=\"sector-name\">CALIBRATION BAY</div></div><div class=\"hud-corner top-right\"><span class=\"hud-stat\">ENEMIES <b id=\"enemies\">01</b></span><span class=\"hud-stat rounds-label\">LIVE ROUNDS <b id=\"rounds\">000</b></span><span class=\"exit-status\" id=\"exit\">LOCKED</span></div><div class=\"hud-corner bottom-left\"><div class=\"vital-label\">VITAL / STANDARD</div><div class=\"health\"><span class=\"health-icon\">+</span><span id=\"hp\">◆</span><small>ONE LIFE</small></div></div><div class=\"hud-corner bottom-right\"><div class=\"current-weapon\"><span class=\"overline\">EQUIPPED</span><strong id=\"weapon\">STANDARD</strong><small id=\"weapon-hint\">精密単発</small></div><div class=\"weapons\"><button class=\"weapon active\" data-weapon=\"standard\" aria-label=\"1 STANDARD: 精密な単発射撃\" title=\"1 STANDARD: 精密な単発射撃\">1<span>STD</span></button><button class=\"weapon \" data-weapon=\"triple\" aria-label=\"2 TRIPLE SHOT: 3方向で集団向け。外した3発も跳ね返る\" title=\"2 TRIPLE SHOT: 3方向で集団向け。外した3発も跳ね返る\">2<span>TRI</span></button><button class=\"weapon \" data-weapon=\"heavy\" aria-label=\"3 HEAVY SHOT: 高威力の重弾。装甲とボスに有効だが弾速は遅い\" title=\"3 HEAVY SHOT: 高威力の重弾。装甲とボスに有効だが弾速は遅い\">3<span>HVY</span></button></div><div class=\"abilities\" id=\"abilities\"></div></div></div><div class=\"overlay\" id=\"overlay\"></div></div><div class=\"underbar\"><span class=\"desktop-instructions\">WASD / 矢印 <b>移動</b> <i>·</i> MOUSE <b>照準</b> <i>·</i> CLICK <b>射撃</b> <i>·</i> ESC <b>一時停止</b></span><span class=\"touch-instructions\">左側ドラッグ <b>移動</b> <i>·</i> 右側ドラッグ <b>照準・射撃</b> <i>·</i> 横向き推奨</span><div class=\"legend\"><span><i class=\"own\"></i>自弾 / 永久跳弾</span><span><i class=\"enemy\"></i>敵弾</span><small id=\"perf\">RSU / v1.0.0</small></div></div></main>";
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
+document.querySelector('.meta')!.insertAdjacentHTML('afterbegin','<button class="quiet" id="fullscreen-toggle" aria-label="フルスクリーン切替" title="フルスクリーン切替">FULL SCREEN ⛶</button>');
 document.querySelector('.ingame-hud')!.insertAdjacentHTML('beforeend','<div class="tutorial" id="tutorial"></div>');
 const ctx = canvas.getContext('2d')!;
 const renderer = new Renderer(ctx);
 const overlay = document.querySelector<HTMLDivElement>('#overlay')!;
-const keys = new Set<string>(); let mouse: Vec = { x: 850, y: 150 }, firing = false;
-let audio: AudioContext | undefined; let lastSound = 0; let bgmGain:GainNode|undefined;
+const keys = new Set<string>(); let mouse: Vec = { x: 850, y: 150 }, firing = false, mouseFiring=false, fireTouchId:number|undefined;
+let moveTouch:{id:number;x:number;y:number;originX:number;originY:number}|undefined;
+const touchStick=document.getElementById('touch-stick')!;
+let audio: AudioContext | undefined; let lastSound = 0;
+const bgmTracks:Record<'main'|'boss',HTMLAudioElement>={main:new Audio(mainBgmUrl),boss:new Audio(bossBgmUrl)};
+const bgmLevels:Record<'main'|'boss',number>={main:0,boss:0};
+for(const track of Object.values(bgmTracks)){track.loop=true;track.preload='none';track.volume=0;}
+let bgmKind:'main'|'boss'='main',bgmFadeTimer:number|undefined;
 function sound(kind: string) {
   if (save.settings.master===0 || save.settings.sfx===0 || !audio) return;
   const now = audio.currentTime; if (kind === 'bounce' && now - lastSound < .035) return; lastSound = now;
@@ -29,14 +38,33 @@ function sound(kind: string) {
   osc.type=wave;osc.frequency.setValueAtTime(start,now);osc.frequency.exponentialRampToValueAtTime(end,now+length);
   gain.gain.setValueAtTime((kind === 'bounce' ? CONFIG.reflectionVolume : kind==='heavy'?.075:.055)*save.settings.master*save.settings.sfx, now); gain.gain.exponentialRampToValueAtTime(.001, now + length); osc.connect(gain); gain.connect(audio.destination); osc.start(); osc.stop(now + length+.01);
 }
-function enableAudio() { if(!audio){audio=new AudioContext();bgmGain=audio.createGain();bgmGain.connect(audio.destination);for(const [freq,volume] of [[55,.5],[82.41,.24],[110,.12]]){const osc=audio.createOscillator(),gain=audio.createGain();osc.type='sine';osc.frequency.value=freq;gain.gain.value=volume;osc.connect(gain);gain.connect(bgmGain);osc.start();}}void audio.resume();updateSound(); }
+function updateBgmVolumes(){const volume=save.settings.master*save.settings.bgm;for(const kind of ['main','boss'] as const)bgmTracks[kind].volume=Math.max(0,Math.min(1,volume*bgmLevels[kind]));}
+function setBgm(kind:'main'|'boss'){
+  if(kind===bgmKind){if(bgmTracks[kind].paused&&audio){if(bgmLevels.main===0&&bgmLevels.boss===0)bgmLevels[kind]=1;void bgmTracks[kind].play().catch(()=>{});updateBgmVolumes();}return;}
+  bgmKind=kind;
+  if(!audio)return;
+  if(bgmFadeTimer!==undefined)window.clearInterval(bgmFadeTimer);
+  const target=bgmTracks[kind];target.currentTime=0;
+  void target.play().then(()=>{
+    if(bgmKind!==kind){target.pause();return;}
+    const start={...bgmLevels},started=performance.now(),duration=650;
+    bgmFadeTimer=window.setInterval(()=>{
+      const progress=Math.min(1,(performance.now()-started)/duration);
+      for(const trackKind of ['main','boss'] as const)bgmLevels[trackKind]=trackKind===kind?start[trackKind]+(1-start[trackKind])*progress:start[trackKind]*(1-progress);
+      updateBgmVolumes();
+      if(progress>=1){window.clearInterval(bgmFadeTimer);bgmFadeTimer=undefined;for(const trackKind of ['main','boss'] as const){bgmLevels[trackKind]=trackKind===kind?1:0;if(trackKind!==kind){bgmTracks[trackKind].pause();bgmTracks[trackKind].currentTime=0;}}updateBgmVolumes();}
+    },32);
+  }).catch(()=>{});
+}
+function enableAudio() { if(!audio)audio=new AudioContext();void audio.resume();setBgm(game.state==='title'||game.stage%10!==0?'main':'boss');updateSound(); }
 game.onSound = kind => { renderer.event(kind, game, mouse); sound(kind); };
 function bind(id: string, fn: () => void) { document.getElementById(id)?.addEventListener('click', fn); }
 function sync() {
-  firing = false;
+  firing = false;mouseFiring=false;fireTouchId=undefined;moveTouch=undefined;touchStick.classList.remove('active');
   overlay.className = `overlay ${game.state} ${menu==='stages'?'menu':''}`;
   document.querySelector('.arena')!.classList.toggle('title-mode', game.state === 'title');
   if(game.state==='playing')recordedClear='';
+  setBgm(game.state==='title'||game.stage%10!==0?'main':'boss');
   save.bestFloor = Math.max(save.bestFloor, game.floor + 1);
   if (game.state === 'stage-clear'||game.state==='won') { const key=`${game.stage}:${game.elapsed}`;if(recordedClear!==key){save=completeStage(save,game.stage,game.elapsed);sound('stage-clear');recordedClear=key;} }
   if (game.state === 'dead'){if(!recordedDeath)save.deaths++;recordedDeath=true;}else recordedDeath=false;
@@ -59,22 +87,26 @@ function sync() {
   bind('stage-select',()=>{game.state='title';menu='stages';sync();});bind('home',()=>{menu='home';sync();});
   overlay.querySelectorAll<HTMLButtonElement>('[data-stage]').forEach(b=>b.onclick=()=>{const stage=Number(b.dataset.stage);if(stage<=save.reachedStage){enableAudio();menu='home';game.start(stage,save.selected);}});
   for(const id of ['character-select','settings','credits'] as const)bind(id,()=>{menu=id==='character-select'?'characters':id;sync();});
-  bind('quit',()=>{window.close();});bind('fullscreen',()=>{if(document.fullscreenElement)void document.exitFullscreen();else void document.documentElement.requestFullscreen();});
+  bind('quit',()=>{window.close();});bind('fullscreen',toggleFullscreen);
   overlay.querySelectorAll<HTMLButtonElement>('[data-character]').forEach(b=>b.onclick=()=>{const id=b.dataset.character as CharacterId;if(save.unlocked.includes(id)){save.selected=id;sync();}});
   overlay.querySelectorAll<HTMLInputElement>('[data-setting]').forEach(input=>input.oninput=()=>{const id=input.dataset.setting as keyof typeof save.settings;if(id==='keyGuide')save.settings.keyGuide=input.checked;else save.settings[id]=Number(input.value)/100;persist();updateSound();const output=input.parentElement?.querySelector('output');if(output)output.textContent=`${input.value}%`;});
   overlay.querySelectorAll<HTMLButtonElement>('[data-ability]').forEach(b => b.onclick = () => game.choose(b.dataset.ability as typeof game.choices[number]));
 }
 game.onChange = sync;
 function togglePause() { if (game.state === 'playing') game.state = 'paused'; else if (game.state === 'paused') game.state = 'playing'; sync(); }
+function toggleFullscreen(){if(document.fullscreenElement)void document.exitFullscreen();else void document.documentElement.requestFullscreen();}
 bind('pause', togglePause); bind('sound', () => { save.settings.master=save.settings.master===0?1:0; persist(); updateSound(); });
-function updateSound() { document.getElementById('sound')!.textContent = save.settings.master===0 ? 'SOUND OFF' : 'SOUND ON';if(audio&&bgmGain)bgmGain.gain.setTargetAtTime(.014*save.settings.master*save.settings.bgm,audio.currentTime,.04); }
+bind('fullscreen-toggle',toggleFullscreen);
+function updateSound() { document.getElementById('sound')!.textContent = save.settings.master===0 ? 'SOUND OFF' : 'SOUND ON';updateBgmVolumes(); }
 document.querySelectorAll<HTMLButtonElement>('[data-weapon]').forEach(b => b.onclick = () => game.setWeapon(b.dataset.weapon as Weapon));
 window.addEventListener('keydown', e => { if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); keys.add(e.key.toLowerCase()); if (e.repeat) return; if (e.key === 'Escape') togglePause(); if (['1','2','3'].includes(e.key) && game.state === 'playing') game.setWeapon((['standard','triple','heavy'] as Weapon[])[Number(e.key) - 1]); if (e.key.toLowerCase() === 'r' && game.state === 'dead') game.retry(); });
 window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
-window.addEventListener('blur', () => { keys.clear(); firing = false; if (game.state === 'playing') togglePause(); });
-canvas.addEventListener('pointermove', e => { const r = canvas.getBoundingClientRect(); mouse = renderer.screenToWorld({ x: (e.clientX - r.left) / r.width * CONFIG.width, y: (e.clientY - r.top) / r.height * CONFIG.height }); });
-canvas.addEventListener('pointerdown', e => { if (e.button === 0) { enableAudio(); firing = true; canvas.setPointerCapture(e.pointerId); } });
-window.addEventListener('pointerup', () => firing = false); canvas.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('blur', () => { keys.clear(); firing = false; mouseFiring=false;fireTouchId=undefined;moveTouch=undefined;touchStick.classList.remove('active'); if (game.state === 'playing') togglePause(); });
+function updateAim(e:PointerEvent){const r=canvas.getBoundingClientRect();mouse=renderer.screenToWorld({x:(e.clientX-r.left)/r.width*CONFIG.width,y:(e.clientY-r.top)/r.height*CONFIG.height});}
+canvas.addEventListener('pointermove', e => { updateAim(e);if(moveTouch?.id===e.pointerId){const r=canvas.getBoundingClientRect(),dx=e.clientX-moveTouch.originX,dy=e.clientY-moveTouch.originY,max=42,length=Math.hypot(dx,dy),scale=length>max?max/length:1;moveTouch.x=dx*scale/max;moveTouch.y=dy*scale/max;touchStick.style.setProperty('--stick-x',`${dx*scale}px`);touchStick.style.setProperty('--stick-y',`${dy*scale}px`);} });
+canvas.addEventListener('pointerdown', e => { if(e.button!==0)return;enableAudio();canvas.setPointerCapture(e.pointerId);updateAim(e);if(e.pointerType==='touch'){const r=canvas.getBoundingClientRect();if(e.clientX<r.left+r.width*.48&&!moveTouch){moveTouch={id:e.pointerId,x:0,y:0,originX:e.clientX,originY:e.clientY};touchStick.classList.add('active');touchStick.style.left=`${Math.max(10,Math.min(r.width-92,e.clientX-r.left-41))}px`;touchStick.style.top=`${Math.max(10,Math.min(r.height-92,e.clientY-r.top-41))}px`;return;}fireTouchId=e.pointerId;firing=true;return;}mouseFiring=true;firing=true; });
+function releasePointer(e:PointerEvent){if(moveTouch?.id===e.pointerId){moveTouch=undefined;touchStick.classList.remove('active');touchStick.style.setProperty('--stick-x','0px');touchStick.style.setProperty('--stick-y','0px');}if(fireTouchId===e.pointerId){fireTouchId=undefined;firing=mouseFiring;}if(e.pointerType==='mouse'){mouseFiring=false;firing=fireTouchId!==undefined;}}
+window.addEventListener('pointerup',releasePointer);window.addEventListener('pointercancel',releasePointer);canvas.addEventListener('contextmenu', e => e.preventDefault());
 let refreshDebug=()=>{};
 if(import.meta.env.DEV&&new URLSearchParams(location.search).has('debug')){
   app.insertAdjacentHTML('beforeend',`<section class="debug-panel" id="debug"><strong>DEV DEBUG</strong><button id="debug-unlock">ALL STAGES UNLOCK</button><label>STAGE <input id="debug-stage" type="number" min="1" max="50" value="1"></label><label>FLOOR <input id="debug-floor" type="number" min="1" max="10" value="1"></label><select id="debug-character">${Object.values(CHARACTERS).map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select><button id="debug-jump">JUMP</button><label><input id="debug-invincible" type="checkbox"> INVINCIBLE</label><label><input id="debug-hitboxes" type="checkbox"> HITBOX</label><output id="debug-stats"></output></section>`);
@@ -86,7 +118,7 @@ if(import.meta.env.DEV&&new URLSearchParams(location.search).has('debug')){
 }
 game.loadFloor(); game.state='title'; sync(); updateSound();
 let previous=performance.now(),accumulator=0,frames=0,frameTime=0;
-function updateTutorial(){const hint=document.getElementById('tutorial')!;if(!save.settings.keyGuide||game.state!=='playing'||game.stage!==1||game.floor>1){hint.textContent='';return;}const t=game.floorTime;
-  hint.textContent=game.floor===0?(t<3?'MOVE: WASD / 矢印　 AIM: MOUSE　 SHOOT: CLICK':t<9?'YOUR BULLETS DO NOT DISAPPEAR UNTIL THEY HIT AN ENEMY.':'KILL ALL ENEMIES → REACH EXIT'):(t<7?'YOUR OWN BULLETS CAN KILL YOU.':game.remaining?'KILL ALL ENEMIES':'REACH EXIT / 残った弾を避けて脱出');}
-function tick(now: number){const delta=Math.min((now-previous)/1000,.08);previous=now;accumulator+=delta;const movement={x:Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft')),y:Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'))};while(accumulator>=CONFIG.fixedStep){if(game.state==='playing')save.totalSeconds+=CONFIG.fixedStep;game.update(CONFIG.fixedStep,movement,mouse,firing);accumulator-=CONFIG.fixedStep;}renderer.shakeScale=save.settings.shake;renderer.flashScale=save.settings.flash;renderer.draw(game,mouse,delta);updateTutorial();refreshDebug();document.getElementById('floor')!.textContent=`${String(game.floor+1).padStart(2,'0')} / 10`;document.querySelector('.top-left .overline')!.textContent=`UNDERGROUND / STAGE ${String(game.stage).padStart(2,'0')}`;document.getElementById('hp')!.textContent=game.player.hp>0?'◆':'◇';document.getElementById('weapon')!.textContent=WEAPONS[game.weapon].name;document.getElementById('weapon-hint')!.textContent=WEAPON_HINTS[game.weapon];document.getElementById('enemies')!.textContent=String(game.remaining).padStart(2,'0');document.getElementById('rounds')!.textContent=`${String(game.bullets.filter(b=>b.owner==='player').length).padStart(3,'0')} / ${CONFIG.maxBullets}`;document.getElementById('exit')!.textContent=game.remaining?'LOCKED':'OPEN';document.getElementById('exit')!.classList.toggle('unlocked',!game.remaining);document.getElementById('sector-name')!.textContent=game.layout.name;document.querySelector('.facility-status')!.textContent=`${STAGES[game.stage-1].areaName} / STAGE ${String(game.stage).padStart(2,'0')}`;document.querySelector('.vital-label')!.textContent=`VITAL / ${CHARACTERS[game.character].name}`;frames++;frameTime+=delta;if(frameTime>1){document.getElementById('perf')!.textContent=`${Math.round(frames/frameTime)} FPS / ${game.bullets.length} OF ${CONFIG.maxBullets} ROUNDS`;persist();frames=0;frameTime=0;}requestAnimationFrame(tick);}
+function updateTutorial(){const hint=document.getElementById('tutorial')!;if(!save.settings.keyGuide||game.state!=='playing'||game.stage!==1||game.floor>1){hint.textContent='';return;}const t=game.floorTime,touch=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0;
+  hint.textContent=game.floor===0?(t<3?(touch?'左ドラッグ: 移動　右ドラッグ: 照準・射撃':'MOVE: WASD / 矢印　 AIM: MOUSE　 SHOOT: CLICK'):t<9?'YOUR BULLETS DO NOT DISAPPEAR UNTIL THEY HIT AN ENEMY.':'KILL ALL ENEMIES → REACH EXIT'):(t<7?'YOUR OWN BULLETS CAN KILL YOU.':game.remaining?'KILL ALL ENEMIES':'REACH EXIT / 残った弾を避けて脱出');}
+function tick(now: number){const delta=Math.min((now-previous)/1000,.08);previous=now;accumulator+=delta;const movement={x:Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'))+(moveTouch?.x??0),y:Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'))+(moveTouch?.y??0)};while(accumulator>=CONFIG.fixedStep){if(game.state==='playing')save.totalSeconds+=CONFIG.fixedStep;game.update(CONFIG.fixedStep,movement,mouse,firing);accumulator-=CONFIG.fixedStep;}renderer.shakeScale=save.settings.shake;renderer.flashScale=save.settings.flash;renderer.draw(game,mouse,delta);updateTutorial();refreshDebug();document.getElementById('floor')!.textContent=`${String(game.floor+1).padStart(2,'0')} / 10`;document.querySelector('.top-left .overline')!.textContent=`UNDERGROUND / STAGE ${String(game.stage).padStart(2,'0')}`;document.getElementById('hp')!.textContent=game.player.hp>0?'◆':'◇';document.getElementById('weapon')!.textContent=WEAPONS[game.weapon].name;document.getElementById('weapon-hint')!.textContent=WEAPON_HINTS[game.weapon];document.getElementById('enemies')!.textContent=String(game.remaining).padStart(2,'0');document.getElementById('rounds')!.textContent=`${String(game.bullets.filter(b=>b.owner==='player').length).padStart(3,'0')} / ${CONFIG.maxBullets}`;document.getElementById('exit')!.textContent=game.remaining?'LOCKED':'OPEN';document.getElementById('exit')!.classList.toggle('unlocked',!game.remaining);document.getElementById('sector-name')!.textContent=game.layout.name;document.querySelector('.facility-status')!.textContent=`${STAGES[game.stage-1].areaName} / STAGE ${String(game.stage).padStart(2,'0')}`;document.querySelector('.vital-label')!.textContent=`VITAL / ${CHARACTERS[game.character].name}`;frames++;frameTime+=delta;if(frameTime>1){document.getElementById('perf')!.textContent=`${Math.round(frames/frameTime)} FPS / ${game.bullets.length} OF ${CONFIG.maxBullets} ROUNDS`;persist();frames=0;frameTime=0;}requestAnimationFrame(tick);}
 requestAnimationFrame(tick);

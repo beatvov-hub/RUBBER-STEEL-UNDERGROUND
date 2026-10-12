@@ -14,6 +14,7 @@
     "package:win": "npm run build && node node_modules/electron/install.js && electron-builder --win zip",
     "test:playthrough": "tsx scripts/playthrough.ts",
     "test:browser": "node scripts/smoke.mjs",
+    "test:mobile": "node scripts/mobile-smoke.mjs",
     "test:desktop": "node scripts/desktop-smoke.mjs",
     "test:debug": "node scripts/debug-smoke.mjs",
     "verify:content": "tsx scripts/verify-content.ts"

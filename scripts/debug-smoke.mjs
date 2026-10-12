@@ -1,5 +1,7 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+await mkdir('artifacts',{recursive:true});
 const browser=await chromium.launch({channel:'msedge',headless:true});
 try{
   const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -13,5 +15,27 @@ try{
   assert.match(await page.locator('#debug-stats').textContent(),/FIRE S\/T\/H/);
   assert.match(await page.locator('#debug-stats').textContent(),/RENDER .*ms/);
   assert.match(await page.locator('.vital-label').textContent(),/THUNDER/);
+  await page.keyboard.press('2');
+  const bounds=await page.locator('#game').boundingBox();
+  await page.mouse.move(bounds.x+bounds.width*.48,bounds.y+bounds.height*.48);await page.mouse.down();
+  const samples=[];const stopAt=Date.now()+8000;
+  while(Date.now()<stopAt){
+    const stats=await page.locator('#debug-stats').textContent(),perf=await page.locator('#perf').textContent();
+    const render=stats.match(/RENDER ([\d.]+)ms/),fps=perf.match(/^(\d+) FPS/),rounds=stats.match(/BULLET (\d+)\/(\d+)/);
+    if(render&&fps&&rounds)samples.push({render:Number(render[1]),fps:Number(fps[1]),bullets:Number(rounds[1]),cap:Number(rounds[2])});
+    await page.waitForTimeout(200);
+  }
+  await page.mouse.up();
+  assert.ok(samples.length>=20,`expected ongoing performance samples, got ${samples.length}`);
+  const renders=samples.map(s=>s.render).sort((a,b)=>a-b),fpsValues=samples.map(s=>s.fps).sort((a,b)=>a-b);
+  const percentile=(values,p)=>values[Math.min(values.length-1,Math.floor(values.length*p))];
+  const peakBullets=Math.max(...samples.map(s=>s.bullets));
+  console.log(`Stage 50 render sample: ${samples.length} samples / FPS median ${percentile(fpsValues,.5)} / p10 ${percentile(fpsValues,.1)} / render median ${percentile(renders,.5)}ms / p95 ${percentile(renders,.95)}ms / peak bullets ${peakBullets}/${samples[0].cap}.`);
+  for(const [stage,floor,name] of [[30,10,'stage-30-boss'],[40,4,'stage-40-floor-4']]){
+    await page.locator('#debug-stage').fill(String(stage));await page.locator('#debug-floor').fill(String(floor));await page.locator('#debug-jump').click();await page.waitForTimeout(300);
+    const stats=await page.locator('#debug-stats').textContent();assert.match(stats,new RegExp(`STAGE ${stage} FLOOR ${floor}`));
+    assert.match(stats,/ENEMY \d+\/\d+/);await page.screenshot({path:`artifacts/${name}.png`});
+    console.log(`${name}: ${stats.match(/ENEMY \d+\/\d+/)?.[0]}`);
+  }
   assert.deepEqual(errors,[]);console.log('Development debug PASS: stage/floor jump, character, invincibility, hitboxes and stats controls.');
 }finally{await browser.close();}
