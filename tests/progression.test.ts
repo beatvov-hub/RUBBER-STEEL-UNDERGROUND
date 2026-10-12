@@ -3,13 +3,37 @@ import assert from 'node:assert/strict';
 import { Game } from '../src/engine';
 import { CHARACTERS, CONFIG } from '../src/data';
 import { completeStage, migrateSave } from '../src/save';
-import { floorFor, validateFloor } from '../src/world';
+import { balanceClusterTypes, floorFor, validateFloor } from '../src/world';
 
 test('all 500 layouts are deterministic, valid and stage progression ends at the final clear',()=>{
+  let clusteredFloors=0;
   for(let stage=1;stage<=50;stage++)for(let floor=1;floor<=10;floor++){
     const layout=floorFor(stage,floor);assert.equal(layout,floorFor(stage,floor));assert.deepEqual(validateFloor(layout),[],`${stage}:${floor}`);
+    const clusters=[...layout.enemies.map(e=>e.cluster),...(layout.reinforcements??[]).flatMap(w=>w.clusterIds??[])].filter((id):id is number=>id!==undefined&&id!==null);
+    if(clusters.length){clusteredFloors++;assert.equal(new Set(clusters).size,clusters.length/3,`${stage}:${floor} clusters must contain three enemies`);}
+    if(floor===10){const allTypes=[...layout.enemies.map(e=>e.type),...(layout.reinforcements??[]).flatMap(w=>w.types)],count=allTypes.length,previous=floorFor(stage,9),previousCount=previous.enemies.length+(previous.reinforcements??[]).reduce((sum,w)=>sum+w.types.length,0);assert.ok(count>=previousCount,`${stage}:10 boss floor should not have fewer enemies than floor 9`);if(stage>=21){assert.equal(count,previousCount+3,`${stage}:late boss floor should add a three-enemy support wave`);const support=allTypes.filter(type=>type!=='boss');assert.ok(support.filter(type=>type==='armored').length>=Math.ceil(support.length*.5),`${stage}:late boss floor should field at least half armored support`);}}
   }
-  const g=new Game();g.start(50);for(let floor=0;floor<10;floor++){g.enemies=[];g.player={...g.exit,hp:1};g.update(CONFIG.fixedStep);if(g.state==='choice')g.choose(g.choices[0]);}assert.equal(g.state,'won');
+  assert.ok(clusteredFloors>100,`cluster opportunities should recur across the 500-floor campaign, got ${clusteredFloors}`);
+  const g=new Game();g.start(50);for(let floor=0;floor<10;floor++){g.enemies=[];g.reinforcementQueue=[];g.reinforcementWarning=undefined;g.player={...g.exit,hp:1};g.update(CONFIG.fixedStep);if(g.state==='choice')g.choose(g.choices[0]);}assert.equal(g.state,'won');
+});
+test('late high-density floor nines offer three recurring TRIPLE cluster opportunities',()=>{
+  for(let stage=41;stage<=50;stage++){
+    const floor=floorFor(stage,9),ids=[...floor.enemies.map(e=>e.cluster),...(floor.reinforcements??[]).flatMap(w=>w.clusterIds??[])].filter((id):id is number=>id!==undefined&&id!==null);
+    assert.equal(new Set(ids).size,3,`stage ${stage} floor 9 should contain three three-enemy clusters`);
+  }
+});
+test('TRIPLE clusters pair at least two unarmored targets without changing floor composition',()=>{
+  const sample=['armored','armored','armored','basic','shooter','armored','armored','basic'] as const;
+  const balanced=balanceClusterTypes([...sample],0);assert.deepEqual([...sample],['armored','armored','armored','basic','shooter','armored','armored','basic']);
+  assert.ok(balanced.slice(0,3).filter(type=>type==='armored').length<=1);
+  for(const type of ['basic','shooter','armored','boss'] as const)assert.equal(balanced.filter(value=>value===type).length,sample.filter(value=>value===type).length);
+  for(let stage=1;stage<=50;stage++)for(let floorNumber=1;floorNumber<=10;floorNumber++){
+    const floor=floorFor(stage,floorNumber),spawns=[...floor.enemies,...(floor.reinforcements??[]).flatMap(w=>w.types.map((type,index)=>({type,x:w.anchors[index].x,y:w.anchors[index].y,cluster:w.clusterIds?.[index]??undefined})))];
+    const before=Object.fromEntries(['basic','shooter','armored','boss'].map(type=>[type,spawns.filter(e=>e.type===type).length]));
+    const ids=new Set(spawns.map(e=>e.cluster).filter((id):id is number=>id!==undefined));
+    for(const id of ids){const members=spawns.filter(e=>e.cluster===id);assert.equal(members.length,3,`${stage}:${floorNumber} cluster ${id} size`);assert.ok(members.filter(e=>e.type==='armored').length<=1,`${stage}:${floorNumber} cluster ${id} should leave two targets vulnerable to TRIPLE`);}
+    const after=Object.fromEntries(['basic','shooter','armored','boss'].map(type=>[type,spawns.filter(e=>e.type===type).length]));assert.deepEqual(after,before,`${stage}:${floorNumber} clustering must preserve the floor's enemy composition`);
+  }
 });
 test('legacy save migrates progress, settings and unlock thresholds',()=>{
   const old=migrateSave({version:1,reachedStage:21,muted:true,bestSeconds:85,deaths:4});
@@ -47,6 +71,14 @@ test('area bosses have distinct profiles and intact armor reflects the opening s
     g.enemies=[boss];g.player={x:g.entry.x,y:g.entry.y,hp:1};const b=g.addBullet(boss.x-40,boss.y,0,'player')!;g.update(.02);
     assert.equal(boss.hp,g.bossSpec.hp);assert.equal(boss.armor,false);assert.ok(b.active);
   }assert.equal(names.size,5);
+});
+test('non-tutorial elite bosses add a warned two-shot fan while area bosses keep their profile',()=>{
+  const fired=(stage:number)=>{const g=new Game();g.start(stage);g.floor=9;g.loadFloor();const boss=g.enemies.find(e=>e.type==='boss')!;g.enemies=[boss];boss.timer=0;g.update(CONFIG.fixedStep);return g.bullets.filter(b=>b.owner==='enemy').length;};
+  assert.equal(fired(1),1);assert.equal(fired(41),2);assert.equal(fired(50),3);
+});
+test('the first-stage reflector boss teaches the armor rule on floor ten',()=>{
+  const g=new Game();g.start(1);g.floor=9;g.loadFloor();const boss=g.enemies.find(e=>e.type==='boss')!;assert.equal(boss.armor,true);
+  const b=g.addBullet(boss.x-40,boss.y,0,'player')!;g.player={x:g.entry.x,y:g.entry.y,hp:1};g.update(.02);assert.equal(boss.hp,g.bossSpec.hp);assert.equal(boss.armor,false);assert.ok(b.active);
 });
 test('debug invincibility is opt-in and does not change normal damage',()=>{
   const g=new Game();g.start();g.debugInvincible=true;g.die('TEST');assert.equal(g.state,'playing');assert.equal(g.player.hp,1);

@@ -18,7 +18,7 @@ export const CHARACTERS:Record<CharacterId,{id:CharacterId;name:string;speed:num
 export const WEAPONS: Record<Weapon, { name: string; speed: number; radius: number; cooldown: number; angles: number[]; damage: number }> = {
   standard: { name: 'STANDARD', speed: CONFIG.bulletSpeed, radius: 4, cooldown: .4, angles: [0], damage: 1 },
   triple: { name: 'TRIPLE SHOT', speed: CONFIG.bulletSpeed, radius: 4, cooldown: .65, angles: [-.19, 0, .19], damage: 1 },
-  heavy: { name: 'HEAVY SHOT', speed: 220, radius: 8, cooldown: .8, angles: [0], damage: 2 },
+  heavy: { name: 'HEAVY SHOT', speed: 220, radius: 8, cooldown: .8, angles: [0], damage: 3 },
 };
 export const ABILITIES = [
   { id: 'magnet', name: 'AIM MAGNET', label: '照準補助', text: '敵の近くを通る自弾が、少しだけ敵へ曲がる。' },
@@ -42,7 +42,9 @@ export const ABILITIES = [
 ] as const;
 export type Ability = typeof ABILITIES[number]['id'];
 export type Hazard = { type: 'moving_wall' | 'collapse'; rect: Rect; warningSeconds: number; period?: number; phase?: number; span?: number; axis?: 'x' | 'y' };
-export type Floor = { name: string; template: string; bounds: Rect; walls: Rect[]; enemies: { type: EnemyType; x: number; y: number }[]; hazards: Hazard[]; seed?: number; stage?: number; number?: number };
+export type EnemySpawn = { type: EnemyType; x: number; y: number; cluster?: number };
+export type ReinforcementWave = { types: Exclude<EnemyType, 'boss'>[]; anchors: Vec[]; clusterIds?: (number|null)[] };
+export type Floor = { name: string; template: string; bounds: Rect; walls: Rect[]; enemies: EnemySpawn[]; reinforcements?: ReinforcementWave[]; enemyTarget?: number; hazards: Hazard[]; seed?: number; stage?: number; number?: number };
 const wall = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h });
 const spawn = (type: EnemyType, x: number, y: number) => ({ type, x, y });
 const layouts = [
@@ -55,6 +57,17 @@ const layouts = [
   [wall(300, 120, 50, 300), wall(520, 370, 50, 200), wall(730, 100, 50, 220)],
   [wall(330, 230, 65, 65), wall(330, 440, 65, 65), wall(750, 230, 65, 65), wall(750, 440, 65, 65)],
 ];
+const stageOneAdds: EnemySpawn[][] = [
+  [],[],
+  [spawn('basic',450,450)],
+  [spawn('basic',300,500),spawn('shooter',900,300)],
+  [spawn('basic',540,500),spawn('shooter',860,280)],
+  [spawn('basic',480,320),spawn('armored',780,520)],
+  [spawn('basic',540,520),spawn('armored',580,270)],
+  [Object.assign(spawn('shooter',453,294),{cluster:1}),Object.assign(spawn('basic',475,330),{cluster:1}),Object.assign(spawn('armored',497,366),{cluster:1})],
+  [spawn('basic',420,500),spawn('shooter',950,220),spawn('armored',1000,500)],
+  [Object.assign(spawn('shooter',700,240),{cluster:1}),Object.assign(spawn('basic',730,280),{cluster:1}),Object.assign(spawn('armored',760,320),{cluster:1}),spawn('basic',520,300),spawn('basic',600,470),spawn('basic',500,180),spawn('basic',600,380),spawn('basic',850,450)],
+];
 export const FLOORS: Floor[] = layouts.map((walls, i) => ({
   name: ['CALIBRATION BAY', 'RETURN PATH', 'FALSE SECURITY', 'PILLAR ARRAY', 'LIVE FIRE', 'REFLECTION LAB', 'ARMORED SECTOR', 'CROSS TRAFFIC', 'NO CLEAN SHOT', 'THE REFLECTOR'][i],
   template: ['SMALL_ROOM', 'SMALL_ROOM', 'OPEN_ROOM', 'PILLAR_ROOM', 'NARROW_ROOM', 'PILLAR_ROOM', 'NARROW_ROOM', 'CROSS_ROOM', 'MAZE_ROOM', 'OPEN_ROOM'][i],
@@ -66,4 +79,4 @@ export const FLOORS: Floor[] = layouts.map((walls, i) => ({
     ...(i >= 6 ? [spawn('armored', 930, 350)] : []),
     ...(i >= 7 ? [spawn('armored', 600, 520)] : []),
   ], hazards: [],
-}));
+})).map((floor,i)=>({...floor,enemies:[...floor.enemies,...stageOneAdds[i]]}));

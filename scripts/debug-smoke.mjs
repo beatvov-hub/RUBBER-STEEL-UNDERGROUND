@@ -10,6 +10,8 @@ try{
   await page.locator('#debug-jump').click();
   assert.match(await page.locator('.facility-status').textContent(),/STAGE 50/);
   assert.match(await page.locator('#debug-stats').textContent(),/FLOOR 10/);
+  assert.match(await page.locator('#debug-stats').textContent(),/FIRE S\/T\/H/);
+  assert.match(await page.locator('#debug-stats').textContent(),/RENDER .*ms/);
   assert.match(await page.locator('.vital-label').textContent(),/THUNDER/);
   assert.deepEqual(errors,[]);console.log('Development debug PASS: stage/floor jump, character, invincibility, hitboxes and stats controls.');
 }finally{await browser.close();}

@@ -157,11 +157,13 @@ export class Renderer {
     ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#14232d';ctx.fillRect(0,0,1120,640);
     ctx.save();ctx.translate(this.camera.x+Math.sin(this.time*110)*this.shake*.3*this.shakeScale,this.camera.y+Math.cos(this.time*93)*this.shake*.3*this.shakeScale);
     ctx.drawImage(this.floorCanvas,0,0);this.hazards(game);this.gate(game,false);this.gate(game,true);
+    if(game.reinforcementWarning){for(const p of game.reinforcementWarning.anchors){const pulse=1+Math.sin(this.time*9)*.08;ctx.save();ctx.translate(p.x,p.y);ctx.scale(pulse,pulse);ctx.fillStyle='#e8796255';ctx.strokeStyle='#ffad8299';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,0,25,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(0,0,33,0,Math.PI*2);ctx.stroke();ctx.restore();this.label(ctx,'INCOMING',p.x,p.y+4,'#ffe0cb',8,'center');}}
     if(title)this.titleScene();else{
       const sorted=[...game.enemies].sort((a,b)=>a.y-b.y);
       for(const e of sorted){const motion=this.motion(e,animDt);if(e.hp<=0&&motion.death>.65)continue;
         drawSoldier(ctx,{position:e,aim:Math.atan2(p.y-e.y,p.x-e.x),move:{x:Math.cos(motion.angle),y:Math.sin(motion.angle)},time:this.time,running:motion.speed>1&&active,role:e.type,armor:e.armor,hit:e.hit*4,death:e.hp<=0?motion.death:0});
-        if(e.type==='boss'&&e.hp>0){shape(ctx,e.x-40,e.y-61,80,4,2,'#203541');shape(ctx,e.x-40,e.y-61,80*e.hp/game.bossSpec.hp,4,2,'#e59a87');this.label(ctx,game.stage%10===0?game.bossSpec.name:'ELITE REFLECTOR',e.x,e.y-68,'#eac6b9',10,'center');if(e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(e.x,e.y,43+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();}}}
+        if(e.type==='boss'&&e.hp>0){shape(ctx,e.x-40,e.y-61,80,4,2,'#203541');shape(ctx,e.x-40,e.y-61,80*e.hp/game.bossSpec.hp,4,2,'#e59a87');this.label(ctx,game.stage%10===0?game.bossSpec.name:'ELITE REFLECTOR',e.x,e.y-68,'#eac6b9',10,'center');if(e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(e.x,e.y,43+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();}}
+        if(e.type==='shooter'&&e.hp>0&&e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(e.x,e.y,23+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();this.label(ctx,'FIRE',e.x,e.y-27,'#ffd0b8',7,'center');}}
       // A precise faint footprint keeps collision location readable under the taller soldier.
       ctx.strokeStyle='#e2e9db44';ctx.lineWidth=1;ctx.beginPath();ctx.arc(p.x,p.y,CONFIG.playerRadius,0,Math.PI*2);ctx.stroke();
       drawSoldier(ctx,{position:p,aim:Math.atan2(aim.y-p.y,aim.x-p.x),move:{x:Math.cos(m.angle),y:Math.sin(m.angle)},time:this.time,running:m.speed>2&&active,role:'player',character:game.character,accent:CHARACTERS[game.character].accent,weapon:game.weapon,recoil:this.recoil,hit:m.flash*this.flashScale,death:m.death});

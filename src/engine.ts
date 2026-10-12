@@ -1,7 +1,7 @@
-import { ABILITIES, CHARACTERS, CONFIG, WEAPONS, type Ability, type CharacterId, type EnemyType, type Hazard, type Rect, type Vec, type Weapon } from './data';
+import { ABILITIES, CHARACTERS, CONFIG, WEAPONS, type Ability, type CharacterId, type EnemyType, type Hazard, type Rect, type ReinforcementWave, type Vec, type Weapon } from './data';
 import { BOSS_ARCHETYPES, floorFor, STAGES } from './world';
-export type Bullet = Vec & { vx: number; vy: number; radius: number; damage: number; active: boolean; owner: 'player' | 'enemy'; reflections: number; age: number; armed: boolean; heavy: boolean; trail: Vec[] };
-export type Enemy = Vec & { type: EnemyType; hp: number; armor: boolean; radius: number; timer: number; hit: number; slow?: number };
+export type Bullet = Vec & { vx: number; vy: number; radius: number; damage: number; active: boolean; owner: 'player' | 'enemy'; reflections: number; age: number; armed: boolean; heavy: boolean; weapon?:Weapon; trail: Vec[] };
+export type Enemy = Vec & { type: EnemyType; hp: number; armor: boolean; radius: number; timer: number; hit: number; slow?: number; cluster?: number };
 export type Effect = Vec & { age: number; color: string; text?: string };
 export type State = 'title' | 'playing' | 'paused' | 'dead' | 'choice' | 'stage-clear' | 'won';
 export type HazardState = { source: Hazard; rect: Rect; warning: boolean; active: boolean; progress: number };
@@ -13,13 +13,16 @@ export class Game {
   state: State = 'title'; stage = 1; floor = 0; character: CharacterId = 'standard'; weapon: Weapon = 'standard'; abilities: Ability[] = [];
   debugInvincible=false;
   player = { x: 0, y: 0, hp: CONFIG.playerHP }; bullets: Bullet[] = []; pool: Bullet[] = []; enemies: Enemy[] = []; effects: Effect[] = [];
+  reinforcementQueue:ReinforcementWave[]=[]; reinforcementWarning?:{anchors:Vec[];timeLeft:number}; private reinforcementTimer=0;
   cooldown = 0; elapsed = 0; floorTime = 0; shots = 0; kills = 0; reflectionCount = 0; message = ''; messageTime = 0;
+  weaponFires:Record<Weapon,number>={standard:0,triple:0,heavy:0};weaponKills:Record<Weapon,number>={standard:0,triple:0,heavy:0};
   deathCause = ''; fatalBullet?: Bullet; choices: Ability[] = []; onSound: (kind: string) => void = () => {}; onChange: () => void = () => {};
   get layout() { return floorFor(this.stage,this.floor+1); }
   get bossSpec(){return BOSS_ARCHETYPES[STAGES[this.stage-1].area];}
   get entry() { const b = this.layout.bounds; return { x: b.x + 45, y: b.y + b.h - 45 }; }
   get exit() { const b = this.layout.bounds; return { x: b.x + b.w - 45, y: b.y + 45 }; }
-  get remaining() { return this.enemies.filter(e => e.hp > 0).length; }
+  get activeRemaining() { return this.enemies.filter(e => e.hp > 0).length; }
+  get remaining() { return this.activeRemaining+this.reinforcementQueue.reduce((total,wave)=>total+wave.types.length,0); }
   get hazards(): HazardState[] { return this.layout.hazards.map(source=>{
     if(source.type==='moving_wall'){
       const start=source.warningSeconds, active=this.floorTime>=start;
@@ -32,21 +35,46 @@ export class Game {
   }); }
   get hazardBlockers(){return this.hazards.filter(h=>h.active).map(h=>h.rect);}
   stacks(id: Ability) { return this.abilities.filter(a => a === id).length; }
-  start(stage=1,character:CharacterId='standard') { if(!Number.isInteger(stage)||stage<1||stage>50)throw new RangeError('Stage must be 1–50'); if(!CHARACTERS[character])throw new RangeError('Unknown character'); this.stage=stage; this.character=character; this.floor = 0; this.abilities = []; this.weapon = 'standard'; this.elapsed = 0; this.shots = 0; this.kills = 0; this.reflectionCount = 0; this.loadFloor(); }
+  start(stage=1,character:CharacterId='standard') { if(!Number.isInteger(stage)||stage<1||stage>50)throw new RangeError('Stage must be 1–50'); if(!CHARACTERS[character])throw new RangeError('Unknown character'); this.stage=stage; this.character=character; this.floor = 0; this.abilities = []; this.weapon = 'standard'; this.elapsed = 0; this.shots = 0; this.kills = 0; this.reflectionCount = 0; this.weaponFires={standard:0,triple:0,heavy:0};this.weaponKills={standard:0,triple:0,heavy:0};this.loadFloor(); }
   loadFloor() {
     for (const b of this.bullets) { b.active = false; this.pool.push(b); } this.bullets = [];
-    this.player = { ...this.entry, hp: CHARACTERS[this.character].hp }; this.enemies = this.layout.enemies.map(e => ({ ...e, hp: e.type === 'boss' ? this.bossSpec.hp : 1, armor: e.type === 'armored'||(e.type==='boss'&&this.stage%10===0), radius: e.type === 'boss' ? 33 : 15, timer: 2.5, hit: 0, slow: 0 }));
+    this.player = { ...this.entry, hp: CHARACTERS[this.character].hp }; this.enemies = this.layout.enemies.map(e => ({ ...e, hp: e.type === 'boss' ? this.bossSpec.hp : e.type==='armored'?2:1, armor: e.type === 'armored'||(e.type==='boss'&&(this.stage===1||this.stage%10===0)), radius: e.type === 'boss' ? 33 : 15, timer: 2.5, hit: 0, slow: 0 }));
+    this.reinforcementQueue=(this.layout.reinforcements??[]).map(w=>({types:[...w.types],anchors:w.anchors.map(p=>({...p})),clusterIds:w.clusterIds?[...w.clusterIds]:undefined}));this.reinforcementWarning=undefined;this.reinforcementTimer=0;
     this.effects = []; this.fatalBullet = undefined; this.floorTime=0; this.cooldown = .35; this.state = 'playing'; this.toast(`FLOOR ${String(this.floor + 1).padStart(2, '0')} / ${this.layout.name}`); this.onChange();
   }
   retry() { this.abilities = []; this.weapon = 'standard'; this.loadFloor(); }
   toast(message: string) { this.message = message; this.messageTime = 2.8; }
+  private updateReinforcements(dt:number){
+    const wave=this.reinforcementQueue[0];
+    if(!wave){this.reinforcementWarning=undefined;return;}
+    if(this.activeRemaining>4){this.reinforcementWarning=undefined;this.reinforcementTimer=0;return;}
+    if(!this.reinforcementWarning){this.reinforcementTimer=2;this.reinforcementWarning={anchors:wave.anchors.map(p=>({...p})),timeLeft:2};this.toast('INCOMING REINFORCEMENTS — 2 SEC');}
+    this.reinforcementTimer=Math.max(0,this.reinforcementTimer-dt);
+    this.reinforcementWarning.timeLeft=this.reinforcementTimer;
+    if(this.reinforcementTimer>0)return;
+    const blocked=this.hazards.filter(h=>h.active).map(h=>h.rect),spawned:number[]=[];
+    for(let i=0;i<wave.types.length;i++){
+      const p=wave.anchors[i];
+      if(distance(p,this.player)<100||this.enemies.some(e=>e.hp>0&&distance(e,p)<54)||blocked.some(r=>circleRect(p,26,r)))continue;
+      const type=wave.types[i];this.enemies.push({x:p.x,y:p.y,type,hp:type==='armored'?2:1,armor:type==='armored',radius:15,timer:2.5,hit:0,slow:0,cluster:wave.clusterIds?.[i]??undefined});spawned.push(i);
+    }
+    if(spawned.length){
+      const spawnedSet=new Set(spawned),types=wave.types.filter((_,i)=>!spawnedSet.has(i)),anchors=wave.anchors.filter((_,i)=>!spawnedSet.has(i)),clusterIds=wave.clusterIds?.filter((_,i)=>!spawnedSet.has(i));
+      if(types.length){this.reinforcementQueue[0]={types,anchors,clusterIds};this.reinforcementTimer=1.25;this.reinforcementWarning={anchors:anchors.map(p=>({...p})),timeLeft:1.25};this.toast('REINFORCEMENTS DEPLOYED — CLEAR THE SIGNALS');}
+      else{this.reinforcementQueue.shift();this.reinforcementTimer=0;this.reinforcementWarning=undefined;}
+      this.onChange();
+    }else{
+      this.reinforcementTimer=.75;this.reinforcementWarning={anchors:wave.anchors.map(p=>({...p})),timeLeft:.75};
+      this.toast('MOVE CLEAR OF REINFORCEMENT SIGNALS');
+    }
+  }
   setWeapon(weapon: Weapon) { this.weapon = weapon; this.onChange(); }
   addBullet(x: number, y: number, angle: number, owner: 'player' | 'enemy', heavy = false) {
     if (this.bullets.length >= CONFIG.maxBullets) return;
     const w = WEAPONS[heavy ? 'heavy' : this.weapon];
     const speed = owner === 'enemy' ? 170 : w.speed * Math.pow(.85, this.stacks('slow'));
     const b = this.pool.pop() ?? {} as Bullet;
-    Object.assign(b, { x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, radius: owner === 'enemy' ? 5 : w.radius + (heavy ? 2 * this.stacks('mass') : 0), damage: owner === 'enemy' ? 1 : w.damage + (heavy ? 2 * this.stacks('power') : 0), active: true, owner, reflections: 0, age: 0, armed: owner === 'enemy', heavy, trail: [] });
+    Object.assign(b, { x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, radius: owner === 'enemy' ? 5 : w.radius + (heavy ? 2 * this.stacks('mass') : 0), damage: owner === 'enemy' ? 1 : w.damage + (heavy ? 2 * this.stacks('power') : 0), active: true, owner, reflections: 0, age: 0, armed: owner === 'enemy', heavy, weapon:owner==='enemy'?undefined:heavy?'heavy':this.weapon, trail: [] });
     this.bullets.push(b); return b;
   }
   shoot(target: Vec) {
@@ -65,7 +93,7 @@ export class Game {
       }
       this.addBullet(this.player.x + Math.cos(angle + offset) * muzzle, this.player.y + Math.sin(angle + offset) * muzzle, angle + offset, 'player', this.weapon === 'heavy');
     }
-    this.cooldown = w.cooldown * Math.pow(.9,this.stacks('trigger')) * (this.weapon==='triple'?Math.pow(.85,this.stacks('salvo')):1); this.shots += w.angles.length; this.onSound(this.weapon==='heavy'?'heavy':this.weapon==='triple'?'triple':'shot');
+    this.cooldown = w.cooldown * Math.pow(.9,this.stacks('trigger')) * (this.weapon==='triple'?Math.pow(.85,this.stacks('salvo')):1); this.shots += w.angles.length;this.weaponFires[this.weapon]++; this.onSound(this.weapon==='heavy'?'heavy':this.weapon==='triple'?'triple':'shot');
   }
   moveCircle(p: Vec, dx: number, dy: number, radius: number) {
     const b = this.layout.bounds;
@@ -89,18 +117,40 @@ export class Game {
     const speed = CHARACTERS[this.character].speed * (1 + .15 * this.stacks('move')) * (1 + .1 * this.stacks('stride')) * (firing?1+.12*this.stacks('strafe'):1) * (!this.remaining?1+.2*this.stacks('exit'):1);
     this.moveCircle(this.player, movement.x / norm * speed * dt, movement.y / norm * speed * dt, CONFIG.playerRadius);
     if (firing && target) this.shoot(target);
-    for (const e of this.enemies) {
+    for (let enemyIndex=0;enemyIndex<this.enemies.length;enemyIndex++) {
+      const e=this.enemies[enemyIndex];
       if (e.hp <= 0) continue; e.timer -= dt; e.hit = Math.max(0, e.hit - dt); e.slow=Math.max(0,(e.slow??0)-dt);
-      const d = distance(e, this.player), a = Math.atan2(this.player.y - e.y, this.player.x - e.x);
-      const move = e.type === 'shooter' ? (d > 330 ? 38 : d < 200 ? -30 : 0) : e.type === 'boss' ? this.bossSpec.speed : e.type === 'armored' ? 39 : 51;
+      const d = distance(e, this.player), a = Math.atan2(this.player.y - e.y, this.player.x - e.x), area=STAGES[this.stage-1].area;
+      let moveX=0,moveY=0;
+      if(e.type==='shooter'){
+        // Shooters hold a readable mid-range orbit instead of standing still inside it.
+        const radial=d>350?40+area*2:d<215?-(28+area*2):Math.max(-14,Math.min(14,(d-280)*.2));
+        const orbit=d<215?14+area: d<=350?(24+area*2)*(Math.sin(this.elapsed*.65+(e.x+e.y)*.003)<0?-1:1):0;
+        moveX=Math.cos(a)*radial+Math.cos(a+Math.PI/2)*orbit;
+        moveY=Math.sin(a)*radial+Math.sin(a+Math.PI/2)*orbit;
+      }else{
+        const speed=e.type==='boss'?this.bossSpec.speed:e.type==='armored'?38+area*4:50+area*4;
+        moveX=Math.cos(a)*speed;moveY=Math.sin(a)*speed;
+      }
+      // Preserve readable silhouettes when pursuers converge on the same route.
+      let separationX=0,separationY=0;
+      for(let otherIndex=0;otherIndex<this.enemies.length;otherIndex++){
+        if(otherIndex===enemyIndex)continue;const other=this.enemies[otherIndex];if(other.hp<=0)continue;
+        let dx=e.x-other.x,dy=e.y-other.y,d=Math.hypot(dx,dy),minimum=e.radius+other.radius+8;
+        if(d>=minimum)continue;
+        if(d<.001){const angle=(enemyIndex-otherIndex)*2.399963229728653;dx=Math.cos(angle);dy=Math.sin(angle);d=1;}
+        const strength=(minimum-d)/minimum;separationX+=dx/d*strength;separationY+=dy/d*strength;
+      }
+      const separationLength=Math.hypot(separationX,separationY);if(separationLength>1){separationX/=separationLength;separationY/=separationLength;}
+      moveX+=separationX*90;moveY+=separationY*90;
       // Axis steering lets pursuers round corners without teleporting through steel.
       const before = { x: e.x, y: e.y };
-      const travel=move*(e.slow>0?.55:1);
-      this.moveCircle(e, Math.cos(a) * travel * dt, Math.sin(a) * travel * dt, e.radius);
-      if (travel && distance(before, e) < .01) this.moveCircle(e, Math.sin(a) * travel * dt, -Math.cos(a) * travel * dt, e.radius);
+      const slow=e.slow>0?.55:1;moveX*=slow;moveY*=slow;
+      this.moveCircle(e,moveX*dt,moveY*dt,e.radius);
+      if ((moveX||moveY) && distance(before, e) < .01) this.moveCircle(e,-moveY*dt,moveX*dt,e.radius);
       if ((e.type === 'shooter' || e.type === 'boss') && e.timer <= 0) {
-        e.timer = e.type === 'boss' ? this.bossSpec.cooldown : 3.7;
-        const count=e.type==='boss'&&this.stage%10===0?this.bossSpec.shots:1;
+        e.timer = e.type === 'boss' ? this.bossSpec.cooldown : 3.5-area*.13;
+        const count=e.type==='boss'?(this.stage===1?1:this.stage%10===0?this.bossSpec.shots:2):1;
         for(let shot=0;shot<count;shot++){const angle=a+(shot-(count-1)/2)*.17;this.addBullet(e.x + Math.cos(angle) * (e.radius + 7), e.y + Math.sin(angle) * (e.radius + 7), angle, 'enemy');} this.onSound('enemy');
       }
       if (d < CONFIG.playerRadius + e.radius) this.die('CONTACT / 敵との接触');
@@ -139,10 +189,10 @@ export class Game {
             this.effects.push({ x: e.x, y: e.y, age: .65, color: '#77d8ea', text: 'ARMOR BREAK' }); this.onSound('clang');
           } else {
             b.active = false; e.hp -= b.damage + (e.type==='boss'&&b.reflections===0?this.stacks('boss'):0); this.onSound('hit'); this.effects.push({ x: e.x, y: e.y, age: .35, color: '#ff8b73' });
-            if(this.character==='fire')for(const other of this.enemies)if(other!==e&&other.hp>0&&!other.armor&&distance(other,e)<66){other.hp-=1;other.hit=.4;this.effects.push({x:other.x,y:other.y,age:.35,color:'#ff9975'});if(other.hp<=0)this.kills++;}
+            if(this.character==='fire')for(const other of this.enemies)if(other!==e&&other.hp>0&&!other.armor&&distance(other,e)<66){other.hp-=1;other.hit=.4;this.effects.push({x:other.x,y:other.y,age:.35,color:'#ff9975'});if(other.hp<=0){this.kills++;this.weaponKills[b.weapon??this.weapon]++;}}
             if(this.character==='ice')for(const other of this.enemies)if(other.hp>0&&distance(other,e)<100)other.slow=Math.max(other.slow??0,1.5);
-            if(this.character==='thunder'){const other=this.enemies.find(other=>other!==e&&other.hp>0&&!other.armor&&distance(other,e)<135);if(other){other.hp-=1;other.hit=.4;this.effects.push({x:other.x,y:other.y,age:.35,color:'#e9d48e'});if(other.hp<=0)this.kills++;}}
-            if (e.hp <= 0) { this.kills++; if (!this.remaining) { this.toast('EXIT OPEN — 残った自弾に注意'); this.onSound('open'); this.onChange(); } }
+            if(this.character==='thunder'){const other=this.enemies.find(other=>other!==e&&other.hp>0&&!other.armor&&distance(other,e)<135);if(other){other.hp-=1;other.hit=.4;this.effects.push({x:other.x,y:other.y,age:.35,color:'#e9d48e'});if(other.hp<=0){this.kills++;this.weaponKills[b.weapon??this.weapon]++;}}}
+            if (e.hp <= 0) { this.kills++;this.weaponKills[b.weapon??this.weapon]++; if (!this.remaining) { this.toast('EXIT OPEN — 残った自弾に注意'); this.onSound('open'); this.onChange(); } }
           }
           break;
         }
@@ -151,6 +201,7 @@ export class Game {
       if (b.trail.length > 7) b.trail.shift(); b.trail.push({ x: b.x, y: b.y });
     }
     for (let i = this.bullets.length - 1; i >= 0; i--) if (!this.bullets[i].active) { this.pool.push(this.bullets[i]); this.bullets.splice(i, 1); }
+    this.updateReinforcements(dt);
     this.effects = this.effects.filter(e => (e.age -= dt) > 0);
     if (this.state === 'playing' && !this.remaining && distance(this.player, this.exit) < 26) this.advance();
   }

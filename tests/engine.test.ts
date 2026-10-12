@@ -19,9 +19,11 @@ test('a missed player round comes back and kills its owner', () => {
 });
 test('armor reflects the first shot and breaks, second hit kills; heavy also reflects', () => {
   for (const heavy of [false,true]) {
-    const g = sandbox(); const e = { x:500,y:240,hp:1,armor:true,radius:15,type:'armored' as const,timer:3,hit:0 }; g.enemies=[e];
-    const b=g.addBullet(470,240,0,'player',heavy)!; step(g,.1); assert.equal(e.armor,false); assert.equal(e.hp,1); assert.ok(b.vx<0); assert.equal(g.bullets.length,1);
-    g.addBullet(470,240,0,'player',heavy);step(g,.1);assert.ok(e.hp<=0);assert.ok(g.bullets.includes(b));
+    const g = sandbox(); const e = { x:500,y:240,hp:2,armor:true,radius:15,type:'armored' as const,timer:3,hit:0 }; g.enemies=[e];
+    const b=g.addBullet(470,240,0,'player',heavy)!; step(g,.1); assert.equal(e.armor,false); assert.equal(e.hp,2); assert.ok(b.vx<0); assert.equal(g.bullets.length,1);
+    g.addBullet(470,240,0,'player',heavy);step(g,.1);
+    if(heavy)assert.ok(e.hp<=0);else{assert.equal(e.hp,1);g.addBullet(470,240,0,'player');step(g,.1);assert.ok(e.hp<=0);}
+    assert.ok(g.bullets.includes(b));
   }
 });
 test('triple miss leaves all three rounds and population cap rejects entire volley', () => {
@@ -46,6 +48,43 @@ test('death and immediate retry reset acquired abilities and all rounds',()=>{
 });
 test('not shooting creates no self hazard but does not clear enemies',()=>{
   const g=new Game();g.start();step(g,1);assert.equal(g.bullets.length,0);assert.equal(g.remaining,1);assert.equal(g.floor,0);
+});
+test('reinforcement waves warn before spawning and keep the exit locked while queued',()=>{
+  const g=new Game();g.start(41);const target=g.remaining;assert.ok(target>12);assert.equal(g.activeRemaining,12);
+  const occupied=g.layout.reinforcements![0].anchors[0];g.player={...occupied,hp:1};
+  for(const e of g.enemies)e.hp=0;
+  step(g,.1);assert.ok(g.reinforcementWarning);assert.equal(g.remaining,9);
+  step(g,2.1);assert.ok(g.activeRemaining>0);assert.ok(g.activeRemaining<=6);assert.equal(g.remaining,9);
+  assert.ok(g.enemies.filter(e=>e.hp>0).every(e=>Math.hypot(e.x-g.player.x,e.y-g.player.y)>=100));
+  for(const e of g.enemies)e.hp=0;step(g,.1);assert.ok(g.reinforcementWarning);assert.equal(g.reinforcementWarning.anchors.length,1);assert.equal(g.remaining,4);
+});
+test('pursuers close faster in later sectors while shooters orbit and retain single warned shots',()=>{
+  const pursuerStep=(stage:number,type:'basic'|'armored')=>{const g=new Game();g.start(stage);g.player={x:300,y:500,hp:1};const e={x:900,y:500,hp:2,armor:type==='armored',radius:15,type,timer:100,hit:0};g.enemies=[e];g.update(.1);return 900-e.x;};
+  const areaStages=[1,11,21,31,41];
+  const basicSteps=areaStages.map(stage=>pursuerStep(stage,'basic')),armoredSteps=areaStages.map(stage=>pursuerStep(stage,'armored'));
+  for(let i=0;i<areaStages.length;i++){
+    assert.ok(Math.abs(basicSteps[i]-(5+i*.4))<.001);assert.ok(Math.abs(armoredSteps[i]-(3.8+i*.4))<.001);
+    if(i)assert.ok(basicSteps[i]>basicSteps[i-1]&&armoredSteps[i]>armoredSteps[i-1]);
+    assert.ok(armoredSteps[i]<basicSteps[i]);
+  }
+  const shooter=new Game();shooter.start(11);shooter.player={x:500,y:300,hp:1};const e={x:780,y:300,hp:1,armor:false,radius:15,type:'shooter' as const,timer:100,hit:0};shooter.enemies=[e];shooter.update(.1);assert.notEqual(e.y,300);
+  const nextShot=(stage:number)=>{const g=new Game();g.start(stage);const e={x:800,y:180,hp:1,armor:false,radius:15,type:'shooter' as const,timer:0,hit:0};g.enemies=[e];g.update(CONFIG.fixedStep);assert.equal(g.bullets.filter(b=>b.owner==='enemy').length,1);return e.timer;};
+  const shooterIntervals=areaStages.map(stage=>nextShot(stage));
+  for(let i=0;i<areaStages.length;i++){
+    assert.ok(Math.abs(shooterIntervals[i]-(3.5-.13*i))<.001);
+    if(i)assert.ok(shooterIntervals[i]<shooterIntervals[i-1]);
+  }
+});
+
+test('pursuers separate instead of collapsing into a single contact stack',()=>{
+  const g=sandbox();g.player={x:220,y:300,hp:1};g.enemies=[0,1,2,3].map(()=>({x:500,y:300,hp:1,armor:false,radius:15,type:'basic' as const,timer:3,hit:0}));
+  step(g,3);const live=g.enemies.filter(e=>e.hp>0);let min=Infinity;for(let i=0;i<live.length;i++)for(let j=0;j<i;j++)min=Math.min(min,Math.hypot(live[i].x-live[j].x,live[i].y-live[j].y));
+  assert.ok(min>=30,`enemy bodies should not overlap, got ${min.toFixed(1)}px`);
+});
+test('TRIPLE clears a close three-target spread in one volley and HEAVY rewards a precise boss hit',()=>{
+  const cluster=sandbox();cluster.player={x:400,y:240,hp:1};cluster.enemies=[198,240,282].map(y=>({x:550,y,hp:1,armor:false,radius:15,type:'basic' as const,timer:100,hit:0}));
+  cluster.weapon='triple';cluster.cooldown=0;cluster.shoot({x:900,y:240});step(cluster,.8);assert.equal(cluster.kills,3);assert.equal(cluster.remaining,0);assert.deepEqual(cluster.weaponKills,{standard:0,triple:3,heavy:0});assert.equal(cluster.weaponFires.triple,1);
+  const heavy=new Game();heavy.start(50);heavy.floor=9;heavy.loadFloor();const boss=heavy.enemies.find(e=>e.type==='boss')!;boss.x=550;boss.y=300;boss.hp=heavy.bossSpec.hp;boss.armor=false;heavy.enemies=[boss];heavy.player={x:450,y:300,hp:1};const round=heavy.addBullet(520,300,0,'player',true)!;step(heavy,.5);assert.equal(boss.hp,heavy.bossSpec.hp-3);assert.equal(round.damage,3);
 });
 test('firing beside steel never spawns a trapped round inside the wall',()=>{
   const g=sandbox();g.player={x:938,y:250,hp:1};g.weapon='heavy';g.cooldown=0;g.shoot({x:1100,y:250});const b=g.bullets[0];assert.ok(b.x+b.radius<=950);step(g,.2);assert.equal(g.state,'dead');assert.match(g.deathCause,/OWN BULLET/);assert.ok(b.reflections<=2);

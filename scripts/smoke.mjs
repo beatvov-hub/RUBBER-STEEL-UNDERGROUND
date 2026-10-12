@@ -15,6 +15,8 @@ assert.equal(await page.locator('[data-character="fire"]').isDisabled(),true);
 await page.locator('#home').click();await page.locator('#settings').click();
 await page.locator('[data-setting="shake"]').fill('0');await page.locator('#home').click();
 await page.locator('#start').click();
+assert.equal(await page.locator('#weapon-hint').textContent(), '精密単発');
+assert.match(await page.locator('[data-weapon="triple"]').getAttribute('aria-label'), /外した3発も跳ね返る/);
 await page.screenshot({ path: 'artifacts/gameplay.png', fullPage: true });
 const rect = await page.locator('#game').boundingBox();
 const pos = (x,y) => ({ x: rect.x + x/1120*rect.width, y: rect.y + y/640*rect.height });
@@ -32,7 +34,8 @@ await page.screenshot({ path: 'artifacts/own-bullet-death.png', fullPage: true }
 await page.locator('#retry').click(); await expect(page.locator('#rounds')).toHaveText('000 / 180');
 await page.keyboard.press('Escape'); assert.ok(await page.locator('#resume').isVisible());
 await page.locator('#resume').click();
-await page.locator('[data-weapon="triple"]').click(); await page.waitForTimeout(100); assert.equal(await page.locator('#weapon').textContent(),'TRIPLE SHOT');
+await page.locator('[data-weapon="triple"]').click(); await page.waitForTimeout(100); assert.equal(await page.locator('#weapon').textContent(),'TRIPLE SHOT'); assert.equal(await page.locator('#weapon-hint').textContent(),'3方向 / 集団向け');
+await page.keyboard.press('3'); await page.waitForTimeout(100); assert.equal(await page.locator('#weapon-hint').textContent(),'高威力 / 装甲・ボス');
 await page.locator('#sound').click(); await page.reload(); assert.equal(await page.locator('#sound').textContent(),'SOUND OFF');
 await page.setViewportSize({width:1000,height:800});await page.screenshot({path:'artifacts/title.png',fullPage:true});
 await page.evaluate(()=>{const save=JSON.parse(localStorage.getItem('rsu-save'));save.reachedStage=50;save.completedStages=Array.from({length:49},(_,i)=>i+1);save.unlocked=['standard','fire','ice','thunder'];localStorage.setItem('rsu-save',JSON.stringify(save));});
