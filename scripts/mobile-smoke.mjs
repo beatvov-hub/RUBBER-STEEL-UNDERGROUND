@@ -1,13 +1,17 @@
 import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { createTestTarget } from './test-server.mjs';
 
 await mkdir('artifacts', { recursive: true });
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const target = await createTestTarget();
+let browser;
+try {
+browser = await chromium.launch({ channel: 'msedge', headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 const page = await context.newPage();
 page.on('pageerror', error => { throw error; });
-await page.goto(process.env.RSU_TEST_URL ?? 'http://127.0.0.1:5174');
+await page.goto(target.url);
 await page.evaluate(() => localStorage.clear());
 await page.reload();
 await page.locator('#start').click();
@@ -46,3 +50,8 @@ await page.screenshot({ path: 'artifacts/mobile-gameplay.png', fullPage: true })
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390, 'mobile layout should not scroll horizontally');
 console.log('Mobile smoke PASS: touch movement, drag aim/fire, HUD instructions, weapon controls and viewport fit.');
 await browser.close();
+browser = undefined;
+} finally {
+  await browser?.close();
+  await target.close();
+}

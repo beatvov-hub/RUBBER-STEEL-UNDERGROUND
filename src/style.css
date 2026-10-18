@@ -914,7 +914,11 @@ h1 {
 .tutorial { position:absolute; top:21px; left:50%; transform:translateX(-50%); max-width:45%; text-align:center; color:#f1efde; background:#17323bd9; border:1px solid #c2d5bb55; border-radius:4px; padding:7px 11px; font-size:10px; line-height:1.4; letter-spacing:.45px; }
 .tutorial:empty { display:none; }
 @media(max-width:680px){.tutorial{top:5px;max-width:42%;padding:4px;font-size:6px}}
-.debug-panel { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px; margin-bottom:20px; background:#241a20; border:1px solid #d68e93; border-radius:5px; font:11px Consolas,monospace; color:#ffe2d7; }
+.debug-panel { display:flex; flex-wrap:wrap; align-items:center; gap:10px; width:min(1376px,calc(100% - 32px)); padding:10px; margin:10px auto 16px; background:#241a20; border:1px solid #d68e93; border-radius:5px; font:11px Consolas,monospace; color:#ffe2d7; }
+.debug-heading { display:flex; align-items:center; flex-wrap:wrap; gap:10px; flex:1 1 100%; }
+.debug-heading strong { color:#ffb9a0; letter-spacing:.12em; }
+.debug-heading small { color:#d8bdba; }
 .debug-panel button,.debug-panel input,.debug-panel select { background:#382a34; color:#ffe2d7; border:1px solid #bd8996; border-radius:3px; padding:3px; font:inherit; }
-.debug-panel input[type=number] { width:42px; }
+.debug-panel input[type=number] { width:56px; }
 .debug-panel label { display:flex; align-items:center; gap:4px; }
+.debug-panel output { flex:1 1 100%; overflow-wrap:anywhere; line-height:1.5; }

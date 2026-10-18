@@ -1,12 +1,13 @@
 import { CHARACTERS, CONFIG, type Vec, type Rect } from '../data';
 import { STAGES } from '../world';
-import type { Game, Enemy, Effect } from '../engine';
+import { circleRect, type Game, type Enemy, type Effect } from '../engine';
 import { drawSoldier, shape } from './soldier';
 
 type Particle = Vec & { vx:number; vy:number; life:number; max:number; color:string; size:number; kind:'spark'|'case'|'dust'|'plate' };
 type Impact = Vec & { life:number; max:number; armor:boolean; direction:number };
 type Motion = { x:number; y:number; angle:number; speed:number; death:number; flash:number; hp:number };
 const clamp=(x:number,min:number,max:number)=>Math.max(min,Math.min(max,x));
+const overlapsRect=(a:Rect,b:Rect)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 const hash=(x:number,y:number)=>{const n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-Math.floor(n);};
 
 /** Presentation only: observes Game, owns all animation, particles, caches and camera offsets. */
@@ -162,7 +163,16 @@ export class Renderer {
       const sorted=[...game.enemies].sort((a,b)=>a.y-b.y);
       for(const e of sorted){const motion=this.motion(e,animDt);if(e.hp<=0&&motion.death>.65)continue;
         drawSoldier(ctx,{position:e,aim:Math.atan2(p.y-e.y,p.x-e.x),move:{x:Math.cos(motion.angle),y:Math.sin(motion.angle)},time:this.time,running:motion.speed>1&&active,role:e.type,armor:e.armor,hit:e.hit*4,death:e.hp<=0?motion.death:0});
-        if(e.type==='boss'&&e.hp>0){shape(ctx,e.x-40,e.y-61,80,4,2,'#203541');shape(ctx,e.x-40,e.y-61,80*e.hp/game.bossSpec.hp,4,2,'#e59a87');this.label(ctx,game.stage%10===0?game.bossSpec.name:'ELITE REFLECTOR',e.x,e.y-68,'#eac6b9',10,'center');if(e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(e.x,e.y,43+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();}}
+        if(e.type==='boss'&&e.hp>0){
+          const bossName=game.stage%10===0?game.bossSpec.name:'ELITE REFLECTOR';let infoX=e.x,barY=e.y-61,nameY=e.y-68;
+          if(e.y<180){
+            ctx.font='600 10px "Segoe UI", sans-serif';const halfName=Math.max(48,ctx.measureText(bossName).width/2+8),blocked=(box:Rect)=>game.layout.walls.some(wall=>overlapsRect(box,wall))||game.enemies.some(other=>other!==e&&other.hp>0&&circleRect(other,other.radius+6,box))||game.hazards.some(hazard=>(hazard.active||hazard.warning)&&overlapsRect(box,hazard.rect));
+            const gutterX=430,gutterBarY=Math.max(90,e.y-67),gutterNameY=gutterBarY+17,gutterName={x:gutterX-halfName,y:gutterNameY-13,w:halfName*2,h:17},gutterBar={x:gutterX-40,y:gutterBarY-2,w:80,h:8};
+            if(Math.abs(e.x-gutterX)>100&&!blocked(gutterName)&&!blocked(gutterBar)){infoX=gutterX;barY=gutterBarY;nameY=gutterNameY;}
+            else{barY=e.y+46;nameY=e.y+63;const candidates=Array.from({length:46},(_,index)=>100+index*20).sort((a,b)=>Math.abs(a-e.x)-Math.abs(b-e.x));infoX=candidates.find(x=>{const nameBox={x:x-halfName,y:nameY-13,w:halfName*2,h:17},barBox={x:x-40,y:barY-2,w:80,h:8};return !blocked(nameBox)&&!blocked(barBox);})??e.x;}
+          }
+          shape(ctx,infoX-40,barY,80,4,2,'#203541');shape(ctx,infoX-40,barY,80*e.hp/game.bossSpec.hp,4,2,'#e59a87');this.label(ctx,bossName,infoX,nameY,'#eac6b9',10,'center');if(e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(e.x,e.y,43+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();}
+        }
         if(e.type==='shooter'&&e.hp>0&&e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(e.x,e.y,23+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();this.label(ctx,'FIRE',e.x,e.y-27,'#ffd0b8',7,'center');}}
       // A precise faint footprint keeps collision location readable under the taller soldier.
       ctx.strokeStyle='#e2e9db44';ctx.lineWidth=1;ctx.beginPath();ctx.arc(p.x,p.y,CONFIG.playerRadius,0,Math.PI*2);ctx.stroke();

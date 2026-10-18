@@ -2,11 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/engine';
 import { ABILITIES, CONFIG, FLOORS } from '../src/data';
+import { REINFORCEMENT_TRIGGER_REMAINING } from '../src/world';
 function sandbox() { const g = new Game(); g.start(); g.enemies = []; g.player = { x: 220, y: 515, hp: 1 }; return g; }
 function step(g: Game, seconds: number) { for (let i = 0; i < seconds * 120; i++) g.update(CONFIG.fixedStep); }
 test('player rounds survive more than 100 reflections without speed loss or lifetime expiry', () => {
-  const g = sandbox(); const b = g.addBullet(400, 240, 0, 'player')!; step(g, 310);
-  assert.equal(g.state, 'playing'); assert.ok(b.reflections > 100); assert.equal(g.bullets.length, 1); assert.ok(Math.abs(Math.hypot(b.vx,b.vy)-CONFIG.bulletSpeed) < .001);
+  const g = sandbox();g.weapon='triple'; const b = g.addBullet(400, 240, 0, 'player')!;g.weapon='standard';step(g, 310);
+  assert.equal(g.state, 'playing'); assert.ok(b.reflections > 100); assert.equal(g.bullets.length, 1); assert.ok(Math.abs(Math.hypot(b.vx,b.vy)-CONFIG.bulletSpeed) < .001);assert.equal(g.weaponReflections.triple,b.reflections);assert.equal(g.weaponReflections.standard,0);
 });
 test('hitting an unarmored enemy consumes only the impacting player round', () => {
   const g = sandbox(); g.enemies = [{ x: 500, y: 240, hp: 1, armor: false, radius: 15, type: 'basic', timer: 3, hit: 0 }];
@@ -20,7 +21,7 @@ test('a missed player round comes back and kills its owner', () => {
 test('armor reflects the first shot and breaks, second hit kills; heavy also reflects', () => {
   for (const heavy of [false,true]) {
     const g = sandbox(); const e = { x:500,y:240,hp:2,armor:true,radius:15,type:'armored' as const,timer:3,hit:0 }; g.enemies=[e];
-    const b=g.addBullet(470,240,0,'player',heavy)!; step(g,.1); assert.equal(e.armor,false); assert.equal(e.hp,2); assert.ok(b.vx<0); assert.equal(g.bullets.length,1);
+    const b=g.addBullet(470,240,0,'player',heavy)!; step(g,.1); assert.equal(e.armor,false); assert.equal(e.hp,2); assert.ok(b.vx<0); assert.equal(g.bullets.length,1);assert.equal(g.weaponReflections[heavy?'heavy':'standard'],1);
     g.addBullet(470,240,0,'player',heavy);step(g,.1);
     if(heavy)assert.ok(e.hp<=0);else{assert.equal(e.hp,1);g.addBullet(470,240,0,'player');step(g,.1);assert.ok(e.hp<=0);}
     assert.ok(g.bullets.includes(b));
@@ -56,7 +57,23 @@ test('reinforcement waves warn before spawning and keep the exit locked while qu
   step(g,.1);assert.ok(g.reinforcementWarning);assert.equal(g.remaining,9);
   step(g,2.1);assert.ok(g.activeRemaining>0);assert.ok(g.activeRemaining<=6);assert.equal(g.remaining,9);
   assert.ok(g.enemies.filter(e=>e.hp>0).every(e=>Math.hypot(e.x-g.player.x,e.y-g.player.y)>=100));
-  for(const e of g.enemies)e.hp=0;step(g,.1);assert.ok(g.reinforcementWarning);assert.equal(g.reinforcementWarning.anchors.length,1);assert.equal(g.remaining,4);
+  for(const e of g.enemies)e.hp=0;step(g,.1);assert.ok(g.reinforcementWarning);assert.ok(g.reinforcementWarning.anchors.length>=1);assert.equal(g.remaining,3+g.reinforcementWarning.anchors.length);
+});
+test('reinforcement deployment stays under the 18-enemy live cap',()=>{
+  const threshold=new Game();threshold.start(41);threshold.player={...threshold.exit,hp:1000};
+  for(const e of threshold.enemies.slice(REINFORCEMENT_TRIGGER_REMAINING+1))e.hp=0;
+  assert.equal(threshold.activeRemaining,REINFORCEMENT_TRIGGER_REMAINING+1);
+  threshold.update(CONFIG.fixedStep);assert.equal(threshold.reinforcementWarning,undefined,'reinforcements must wait while five enemies remain');
+  threshold.enemies[REINFORCEMENT_TRIGGER_REMAINING].hp=0;threshold.update(CONFIG.fixedStep);
+  assert.ok(threshold.reinforcementWarning,'reinforcements should warn as soon as only four enemies remain');
+
+  const g=new Game();g.start(41);g.player={...g.exit,hp:1000};
+  for(const e of g.enemies.slice(REINFORCEMENT_TRIGGER_REMAINING))e.hp=0;
+  assert.equal(g.activeRemaining,REINFORCEMENT_TRIGGER_REMAINING);
+  g.update(CONFIG.fixedStep);assert.ok(g.reinforcementWarning);
+  g.update(2.1);
+  assert.ok(g.activeRemaining<=10,`four survivors plus one six-enemy wave should peak at ten, got ${g.activeRemaining}`);
+  assert.ok(g.activeRemaining<=18);
 });
 test('pursuers close faster in later sectors while shooters orbit and retain single warned shots',()=>{
   const pursuerStep=(stage:number,type:'basic'|'armored')=>{const g=new Game();g.start(stage);g.player={x:300,y:500,hp:1};const e={x:900,y:500,hp:2,armor:type==='armored',radius:15,type,timer:100,hit:0};g.enemies=[e];g.update(.1);return 900-e.x;};

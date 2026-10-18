@@ -1,6 +1,9 @@
 import { CONFIG, FLOORS, type EnemySpawn, type EnemyType, type Floor, type Hazard, type Rect, type Vec } from './data';
 
 export const AREA_NAMES = ['ENTRY SECTOR', 'INDUSTRIAL SECTOR', 'EXPERIMENT SECTOR', 'CONTAINMENT FAILURE', 'RUBBER STEEL CORE'] as const;
+export const INITIAL_ENEMY_CAP = 12;
+export const REINFORCEMENT_WAVE_SIZE = 6;
+export const REINFORCEMENT_TRIGGER_REMAINING = 4;
 export type Stage = { number: number; area: number; areaName: string; name: string; seed: number; palette: { floor: string; accent: string; light: string }; boss: 'elite' | 'area' | 'final' };
 export const BOSS_ARCHETYPES = [
   {name:'THE GATEKEEPER',hp:8,speed:28,cooldown:3.4,shots:1},
@@ -55,12 +58,21 @@ const overlaps=(a:Rect,b:Rect)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b
 function clear(p:Vec, radius:number, b:Rect, walls:Rect[]) {
   return p.x>=b.x+radius && p.y>=b.y+radius && p.x<=b.x+b.w-radius && p.y<=b.y+b.h-radius && walls.every(w=>!circleRect(p,radius,w));
 }
+function clearShot(a:Vec,b:Vec,walls:Rect[]) {
+  const length=Math.hypot(b.x-a.x,b.y-a.y);
+  for(let along=10;along<length-10;along+=8){const p={x:a.x+(b.x-a.x)*along/length,y:a.y+(b.y-a.y)*along/length};if(walls.some(w=>circleRect(p,9,w)))return false;}
+  return true;
+}
 function entryOf(b:Rect):Vec { return {x:b.x+45,y:b.y+b.h-45}; }
 function exitOf(b:Rect):Vec { return {x:b.x+b.w-45,y:b.y+45}; }
 const AREA_ENEMY_MULTIPLIERS=[1.4,1.8,2.2,2.6,3.0] as const;
+export function baselineEnemyTargetFor(stage:number,number:number):number {
+  const area=STAGES[stage-1].area;
+  return number===10?1+Math.min(4,area):Math.min(3+Math.floor(number/3)+area,10);
+}
 export function enemyTargetFor(stage:number,number:number):number {
   const area=STAGES[stage-1].area;
-  const base=number===10?1+Math.min(4,area):Math.min(3+Math.floor(number/3)+area,10);
+  const base=baselineEnemyTargetFor(stage,number);
   const target=Math.max(number===10?2:1,Math.round(base*AREA_ENEMY_MULTIPLIERS[area]));
   if(number!==10)return target;
   const previous=Math.round(Math.min(3+Math.floor(9/3)+area,10)*AREA_ENEMY_MULTIPLIERS[area]);
@@ -84,7 +96,6 @@ export function balanceClusterTypes(types:EnemyType[],groupStart:number):EnemyTy
   }
   return balanced;
 }
-const INITIAL_ENEMY_CAP=12, REINFORCEMENT_WAVE_SIZE=6;
 function groupReinforcements(spawns:EnemySpawn[]) {
   const reinforcements:NonNullable<Floor['reinforcements']>=[];
   for(let start=0;start<spawns.length;start+=REINFORCEMENT_WAVE_SIZE){
@@ -179,21 +190,31 @@ function candidate(stage:number,number:number,attempt:number):Floor {
   };
   if(elite)placeSingle(types[0]);
   let typeIndex=elite?1:0,clusterId=0;
-  const clusterCount=Math.min(3,Math.floor((enemyCount+2)/10));
+  // Scale TRIPLE opportunities more gradually so medium rooms keep their spacing.
+  const lightTargets=types.filter(type=>type!=='armored'&&type!=='boss').length;
+  const clusterCap=area===4&&number>=9?5:4;
+  const targetClusterCount=area===4&&number>=9?Math.floor((enemyCount+7)/7):Math.floor((enemyCount+2)/8);
+  const clusterCount=Math.min(clusterCap,targetClusterCount,Math.floor(lightTargets/2));
   for(let group=0;group<clusterCount;group++){
     const groupStart=typeIndex,groupEnd=groupStart+3;typeIndex=groupEnd;
     // Preserve each floor's enemy mix, but keep at least two light targets in a TRIPLE opportunity.
     types=balanceClusterTypes(types,groupStart);
     const groupTypes=types.slice(groupStart,groupEnd);
     if(groupTypes.length!==3||groupTypes.includes('boss')){for(const type of groupTypes)placeSingle(type);continue;}
-    let placed=false;
+    let placed=false,bestEntryCluster:{positions:Vec[];visible:number;distance:number}|undefined;
     for(let tries=0;tries<360&&!placed;tries++){
       const cx=bounds.x+110+rng()*(bounds.w-220),cy=bounds.y+90+rng()*(bounds.h-180),approach=Math.atan2(cy-entryOf(bounds).y,cx-entryOf(bounds).x),axis=approach+Math.PI/2;
-      const positions=[-42,0,42].map(offset=>({x:Math.round(cx+Math.cos(axis)*offset),y:Math.round(cy+Math.sin(axis)*offset)}));
+      const positions=[-56,0,56].map(offset=>({x:Math.round(cx+Math.cos(axis)*offset),y:Math.round(cy+Math.sin(axis)*offset)}));
       if(positions.some(p=>Math.hypot(p.x-entryOf(bounds).x,p.y-entryOf(bounds).y)<180||Math.hypot(p.x-exitOf(bounds).x,p.y-exitOf(bounds).y)<65||!clear(p,21,bounds,walls)||hazards.some(h=>circleRect(p,28,hazardEnvelope(h)))))continue;
       if(positions.some(p=>allEnemies.some(e=>Math.hypot(e.x-p.x,e.y-p.y)<65)))continue;
+      if(group===0){
+        const entry=entryOf(bounds),visible=positions.filter(p=>clearShot(entry,p,walls)).length,distance=Math.min(...positions.map(p=>Math.hypot(p.x-entry.x,p.y-entry.y)));
+        if(!bestEntryCluster||visible>bestEntryCluster.visible||visible===bestEntryCluster.visible&&Math.abs(distance-300)<Math.abs(bestEntryCluster.distance-300))bestEntryCluster={positions,visible,distance};
+        if(visible<2||distance<200||distance>400)continue;
+      }
       const id=++clusterId;for(let i=0;i<3;i++)allEnemies.push({...positions[i],type:groupTypes[i],cluster:id});placed=true;
     }
+    if(!placed&&group===0&&bestEntryCluster){const id=++clusterId;for(let i=0;i<3;i++)allEnemies.push({...bestEntryCluster.positions[i],type:groupTypes[i],cluster:id});placed=true;}
     if(!placed)for(const type of groupTypes)placeSingle(type);
   }
   for(;typeIndex<types.length;typeIndex++)placeSingle(types[typeIndex]);

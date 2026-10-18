@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Game } from '../src/engine';
+import { circleRect, Game } from '../src/engine';
 import { CHARACTERS, CONFIG } from '../src/data';
 import { completeStage, migrateSave } from '../src/save';
-import { balanceClusterTypes, floorFor, validateFloor } from '../src/world';
+import { baselineEnemyTargetFor, balanceClusterTypes, enemyTargetFor, floorFor, INITIAL_ENEMY_CAP, REINFORCEMENT_TRIGGER_REMAINING, REINFORCEMENT_WAVE_SIZE, validateFloor } from '../src/world';
 
 test('all 500 layouts are deterministic, valid and stage progression ends at the final clear',()=>{
   let clusteredFloors=0;
@@ -16,10 +16,55 @@ test('all 500 layouts are deterministic, valid and stage progression ends at the
   assert.ok(clusteredFloors>100,`cluster opportunities should recur across the 500-floor campaign, got ${clusteredFloors}`);
   const g=new Game();g.start(50);for(let floor=0;floor<10;floor++){g.enemies=[];g.reinforcementQueue=[];g.reinforcementWarning=undefined;g.player={...g.exit,hp:1};g.update(CONFIG.fixedStep);if(g.state==='choice')g.choose(g.choices[0]);}assert.equal(g.state,'won');
 });
-test('late high-density floor nines offer three recurring TRIPLE cluster opportunities',()=>{
-  for(let stage=41;stage<=50;stage++){
-    const floor=floorFor(stage,9),ids=[...floor.enemies.map(e=>e.cluster),...(floor.reinforcements??[]).flatMap(w=>w.clusterIds??[])].filter((id):id is number=>id!==undefined&&id!==null);
-    assert.equal(new Set(ids).size,3,`stage ${stage} floor 9 should contain three three-enemy clusters`);
+test('dense late floors scale TRIPLE opportunities with enemy count',()=>{
+  for(let stage=41;stage<=50;stage++)for(const floorNumber of [9,10]){
+    const floor=floorFor(stage,floorNumber),ids=[...floor.enemies.map(e=>e.cluster),...(floor.reinforcements??[]).flatMap(w=>w.clusterIds??[])].filter((id):id is number=>id!==undefined&&id!==null);
+    const expected=Math.min(5,Math.floor((enemyTargetFor(stage,floorNumber)+7)/7));
+    assert.equal(new Set(ids).size,expected,`stage ${stage} floor ${floorNumber} should scale clusters with its enemy target`);
+  }
+});
+test('first TRIPLE cluster is visible in its effective spread range from entry',()=>{
+  let checked=0;
+  for(let stage=1;stage<=50;stage++)for(let floorNumber=1;floorNumber<=10;floorNumber++){
+    if(stage===1&&floorNumber===10)continue; // Preserve the authored tutorial boss formation.
+    const floor=floorFor(stage,floorNumber),bounds=floor.bounds,entry={x:bounds.x+45,y:bounds.y+bounds.h-45};
+    const enemies=[...floor.enemies,...(floor.reinforcements??[]).flatMap(wave=>wave.types.map((type,index)=>({type,x:wave.anchors[index].x,y:wave.anchors[index].y,cluster:wave.clusterIds?.[index]??undefined})))];
+    const groups=new Map<number,typeof enemies>();for(const enemy of enemies)if(enemy.cluster!==undefined)groups.set(enemy.cluster,[...(groups.get(enemy.cluster)??[]),enemy]);
+    const first=groups.values().next().value;if(!first)continue;checked++;
+    const clearShot=(target:typeof first[number])=>{const distance=Math.hypot(target.x-entry.x,target.y-entry.y);for(let along=10;along<distance-10;along+=8){const point={x:entry.x+(target.x-entry.x)*along/distance,y:entry.y+(target.y-entry.y)*along/distance};if(floor.walls.some(wall=>circleRect(point,9,wall)))return false;}return true;};
+    assert.ok(first.filter(clearShot).length>=2,`${stage}:${floorNumber} first cluster should expose two targets from entry`);
+    const range=Math.min(...first.map(enemy=>Math.hypot(enemy.x-entry.x,enemy.y-entry.y)));
+    assert.ok(range>=200&&range<=400,`${stage}:${floorNumber} first cluster should stay in the 200–400px spread range, got ${range.toFixed(1)}px`);
+  }
+  assert.equal(checked,471);
+});
+test('all 500 floor plans keep initial enemies and reinforcement waves within the live cap',()=>{
+  let maxInitial=0,maxWave=0;
+  for(let stage=1;stage<=50;stage++)for(let floorNumber=1;floorNumber<=10;floorNumber++){
+    const floor=floorFor(stage,floorNumber);maxInitial=Math.max(maxInitial,floor.enemies.length);
+    assert.ok(floor.enemies.length<=INITIAL_ENEMY_CAP,`${stage}:${floorNumber} initial enemies exceeded ${INITIAL_ENEMY_CAP}`);
+    for(const wave of floor.reinforcements??[]){maxWave=Math.max(maxWave,wave.types.length);assert.ok(wave.types.length<=REINFORCEMENT_WAVE_SIZE,`${stage}:${floorNumber} reinforcement wave exceeded ${REINFORCEMENT_WAVE_SIZE}`);assert.ok(REINFORCEMENT_TRIGGER_REMAINING+wave.types.length<=18,`${stage}:${floorNumber} wave can exceed the 18-enemy live cap`);}
+  }
+  assert.equal(maxInitial,INITIAL_ENEMY_CAP);assert.equal(maxWave,REINFORCEMENT_WAVE_SIZE);
+});
+test('five-area enemy curve preserves the tutorial and raises each floor toward the boss',()=>{
+  const expected=[[3.7,8.1,8.1],[7,13,13],[11,18,21],[16,23,26],[21,30,33]];
+  const count=(stage:number,floorNumber:number)=>{const floor=floorFor(stage,floorNumber);return floor.enemies.length+(floor.reinforcements??[]).reduce((sum,wave)=>sum+wave.types.length,0);};
+  assert.equal(count(1,1),1);assert.equal(count(1,2),2);
+  for(let area=0;area<5;area++)for(const [index,floorNumber] of [1,9,10].entries()){
+    const average=Array.from({length:10},(_,offset)=>count(area*10+offset+1,floorNumber)).reduce((sum,value)=>sum+value,0)/10;
+    assert.equal(Math.round(average*10),Math.round(expected[area][index]*10),`area ${area+1} floor ${floorNumber} average enemy target`);
+  }
+});
+test('five-area enemy totals stay near the intended growth multipliers',()=>{
+  const targets=[1.4,1.8,2.2,2.6,3.0];
+  for(let area=0;area<5;area++){
+    let actual=0,baseline=0;
+    for(let stage=area*10+1;stage<=area*10+10;stage++)for(let floorNumber=1;floorNumber<=10;floorNumber++){
+      const floor=floorFor(stage,floorNumber),count=floor.enemies.length+(floor.reinforcements??[]).reduce((sum,wave)=>sum+wave.types.length,0);actual+=count;
+      const raw=stage===1?count:baselineEnemyTargetFor(stage,floorNumber),previous=baselineEnemyTargetFor(stage,9);baseline+=stage===1?raw:floorNumber===10?Math.max(raw,previous):raw;
+    }
+    assert.ok(Math.abs(actual/baseline-targets[area])<=.08,`area ${area+1} reached ${(actual/baseline).toFixed(2)}x, expected ${targets[area]}x ±0.08`);
   }
 });
 test('TRIPLE clusters pair at least two unarmored targets without changing floor composition',()=>{
@@ -31,7 +76,7 @@ test('TRIPLE clusters pair at least two unarmored targets without changing floor
     const floor=floorFor(stage,floorNumber),spawns=[...floor.enemies,...(floor.reinforcements??[]).flatMap(w=>w.types.map((type,index)=>({type,x:w.anchors[index].x,y:w.anchors[index].y,cluster:w.clusterIds?.[index]??undefined})))];
     const before=Object.fromEntries(['basic','shooter','armored','boss'].map(type=>[type,spawns.filter(e=>e.type===type).length]));
     const ids=new Set(spawns.map(e=>e.cluster).filter((id):id is number=>id!==undefined));
-    for(const id of ids){const members=spawns.filter(e=>e.cluster===id);assert.equal(members.length,3,`${stage}:${floorNumber} cluster ${id} size`);assert.ok(members.filter(e=>e.type==='armored').length<=1,`${stage}:${floorNumber} cluster ${id} should leave two targets vulnerable to TRIPLE`);}
+    for(const id of ids){const members=spawns.filter(e=>e.cluster===id);assert.equal(members.length,3,`${stage}:${floorNumber} cluster ${id} size`);assert.ok(members.filter(e=>e.type==='armored').length<=1,`${stage}:${floorNumber} cluster ${id} should leave two targets vulnerable to TRIPLE`);const nearest=members.map(member=>Math.min(...members.filter(other=>other!==member).map(other=>Math.hypot(member.x-other.x,member.y-other.y))));assert.ok(Math.min(...nearest)>=50&&Math.max(...nearest)<=65,`${stage}:${floorNumber} cluster ${id} should offer a tight but non-overlapping spread`);}
     const after=Object.fromEntries(['basic','shooter','armored','boss'].map(type=>[type,spawns.filter(e=>e.type===type).length]));assert.deepEqual(after,before,`${stage}:${floorNumber} clustering must preserve the floor's enemy composition`);
   }
 });

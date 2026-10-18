@@ -1,5 +1,5 @@
 import { ABILITIES, CHARACTERS, CONFIG, WEAPONS, type Ability, type CharacterId, type EnemyType, type Hazard, type Rect, type ReinforcementWave, type Vec, type Weapon } from './data';
-import { BOSS_ARCHETYPES, floorFor, STAGES } from './world';
+import { BOSS_ARCHETYPES, floorFor, REINFORCEMENT_TRIGGER_REMAINING, STAGES } from './world';
 export type Bullet = Vec & { vx: number; vy: number; radius: number; damage: number; active: boolean; owner: 'player' | 'enemy'; reflections: number; age: number; armed: boolean; heavy: boolean; weapon?:Weapon; trail: Vec[] };
 export type Enemy = Vec & { type: EnemyType; hp: number; armor: boolean; radius: number; timer: number; hit: number; slow?: number; cluster?: number };
 export type Effect = Vec & { age: number; color: string; text?: string };
@@ -15,7 +15,7 @@ export class Game {
   player = { x: 0, y: 0, hp: CONFIG.playerHP }; bullets: Bullet[] = []; pool: Bullet[] = []; enemies: Enemy[] = []; effects: Effect[] = [];
   reinforcementQueue:ReinforcementWave[]=[]; reinforcementWarning?:{anchors:Vec[];timeLeft:number}; private reinforcementTimer=0;
   cooldown = 0; elapsed = 0; floorTime = 0; shots = 0; kills = 0; reflectionCount = 0; message = ''; messageTime = 0;
-  weaponFires:Record<Weapon,number>={standard:0,triple:0,heavy:0};weaponKills:Record<Weapon,number>={standard:0,triple:0,heavy:0};
+  weaponFires:Record<Weapon,number>={standard:0,triple:0,heavy:0};weaponKills:Record<Weapon,number>={standard:0,triple:0,heavy:0};weaponReflections:Record<Weapon,number>={standard:0,triple:0,heavy:0};
   deathCause = ''; fatalBullet?: Bullet; choices: Ability[] = []; onSound: (kind: string) => void = () => {}; onChange: () => void = () => {};
   get layout() { return floorFor(this.stage,this.floor+1); }
   get bossSpec(){return BOSS_ARCHETYPES[STAGES[this.stage-1].area];}
@@ -35,7 +35,7 @@ export class Game {
   }); }
   get hazardBlockers(){return this.hazards.filter(h=>h.active).map(h=>h.rect);}
   stacks(id: Ability) { return this.abilities.filter(a => a === id).length; }
-  start(stage=1,character:CharacterId='standard') { if(!Number.isInteger(stage)||stage<1||stage>50)throw new RangeError('Stage must be 1–50'); if(!CHARACTERS[character])throw new RangeError('Unknown character'); this.stage=stage; this.character=character; this.floor = 0; this.abilities = []; this.weapon = 'standard'; this.elapsed = 0; this.shots = 0; this.kills = 0; this.reflectionCount = 0; this.weaponFires={standard:0,triple:0,heavy:0};this.weaponKills={standard:0,triple:0,heavy:0};this.loadFloor(); }
+  start(stage=1,character:CharacterId='standard') { if(!Number.isInteger(stage)||stage<1||stage>50)throw new RangeError('Stage must be 1–50'); if(!CHARACTERS[character])throw new RangeError('Unknown character'); this.stage=stage; this.character=character; this.floor = 0; this.abilities = []; this.weapon = 'standard'; this.elapsed = 0; this.shots = 0; this.kills = 0; this.reflectionCount = 0; this.weaponFires={standard:0,triple:0,heavy:0};this.weaponKills={standard:0,triple:0,heavy:0};this.weaponReflections={standard:0,triple:0,heavy:0};this.loadFloor(); }
   loadFloor() {
     for (const b of this.bullets) { b.active = false; this.pool.push(b); } this.bullets = [];
     this.player = { ...this.entry, hp: CHARACTERS[this.character].hp }; this.enemies = this.layout.enemies.map(e => ({ ...e, hp: e.type === 'boss' ? this.bossSpec.hp : e.type==='armored'?2:1, armor: e.type === 'armored'||(e.type==='boss'&&(this.stage===1||this.stage%10===0)), radius: e.type === 'boss' ? 33 : 15, timer: 2.5, hit: 0, slow: 0 }));
@@ -47,7 +47,7 @@ export class Game {
   private updateReinforcements(dt:number){
     const wave=this.reinforcementQueue[0];
     if(!wave){this.reinforcementWarning=undefined;return;}
-    if(this.activeRemaining>4){this.reinforcementWarning=undefined;this.reinforcementTimer=0;return;}
+    if(this.activeRemaining>REINFORCEMENT_TRIGGER_REMAINING){this.reinforcementWarning=undefined;this.reinforcementTimer=0;return;}
     if(!this.reinforcementWarning){this.reinforcementTimer=2;this.reinforcementWarning={anchors:wave.anchors.map(p=>({...p})),timeLeft:2};this.toast('INCOMING REINFORCEMENTS — 2 SEC');}
     this.reinforcementTimer=Math.max(0,this.reinforcementTimer-dt);
     this.reinforcementWarning.timeLeft=this.reinforcementTimer;
@@ -105,7 +105,7 @@ export class Game {
   reflect(b: Bullet, axis: 'x' | 'y') {
     if (axis === 'x') b.vx *= -1; else b.vy *= -1;
     if (b.owner === 'player' && b.reflections === 0) { const factor=Math.pow(.9,this.stacks('coolant')); b.vx*=factor; b.vy*=factor; }
-    b.reflections++; b.armed = true; this.reflectionCount++;
+    b.reflections++; b.armed = true; this.reflectionCount++;if(b.owner==='player')this.weaponReflections[b.weapon??(b.heavy?'heavy':this.weapon)]++;
     this.effects.push({ x: b.x, y: b.y, age: .2, color: '#e7fa9e' }); this.onSound('bounce');
   }
   update(dt: number, movement: Vec = { x: 0, y: 0 }, target?: Vec, firing = false) {
@@ -185,7 +185,7 @@ export class Game {
             b.vx -= 2 * dot * nx; b.vy -= 2 * dot * ny;
             const slow = Math.pow(.75, this.stacks('armor'))*Math.pow(.9,this.stacks('control')); b.vx *= slow; b.vy *= slow;
             const radius = e.radius * hitScale + b.radius + 1;
-            b.x = e.x + nx * radius; b.y = e.y + ny * radius; b.armed = true; b.reflections++; this.reflectionCount++;
+            b.x = e.x + nx * radius; b.y = e.y + ny * radius; b.armed = true; b.reflections++; this.reflectionCount++;this.weaponReflections[b.weapon??(b.heavy?'heavy':this.weapon)]++;
             this.effects.push({ x: e.x, y: e.y, age: .65, color: '#77d8ea', text: 'ARMOR BREAK' }); this.onSound('clang');
           } else {
             b.active = false; e.hp -= b.damage + (e.type==='boss'&&b.reflections===0?this.stacks('boss'):0); this.onSound('hit'); this.effects.push({ x: e.x, y: e.y, age: .35, color: '#ff8b73' });

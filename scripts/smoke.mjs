@@ -1,12 +1,16 @@
 import { chromium, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import { createTestTarget } from './test-server.mjs';
 await mkdir('artifacts', { recursive: true });
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const target = await createTestTarget();
+let browser;
+try {
+browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1060 } });
 await page.addInitScript(() => { window.__rsuTrackPlays = []; const originalPlay = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { window.__rsuTrackPlays.push(this.currentSrc || this.src); return originalPlay.call(this); }; });
 const errors = []; page.on('pageerror', e => errors.push(e.message));
-await page.goto(process.env.RSU_TEST_URL ?? 'http://127.0.0.1:5174');
+await page.goto(target.url);
 assert.equal(await page.locator('#debug').count(),0);
 assert.equal(await page.locator('#fullscreen-toggle').count(),1);
 assert.equal(await page.locator('[data-stage]').count(),0);
@@ -52,4 +56,7 @@ assert.match(await page.locator('.top-left .overline').textContent(),/STAGE 50/)
 await page.screenshot({path:'artifacts/stage-50.png',fullPage:true});
 assert.deepEqual(errors, []);
 console.log('Browser smoke PASS: title, 50-stage selection, character unlock, aimed kill, exit unlock, delayed own-bullet death, retry, pause, weapon switch, settings persistence.');
-await browser.close();
+} finally {
+  await browser?.close();
+  await target.close();
+}

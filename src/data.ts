@@ -64,7 +64,7 @@ const stageOneAdds: EnemySpawn[][] = [
   [spawn('basic',540,500),spawn('shooter',860,280)],
   [spawn('basic',480,320),spawn('armored',780,520)],
   [spawn('basic',540,520),spawn('armored',580,270)],
-  [Object.assign(spawn('shooter',453,294),{cluster:1}),Object.assign(spawn('basic',475,330),{cluster:1}),Object.assign(spawn('armored',497,366),{cluster:1})],
+  [Object.assign(spawn('shooter',301,320),{cluster:1}),Object.assign(spawn('basic',335,365),{cluster:1}),Object.assign(spawn('armored',369,410),{cluster:1})],
   [spawn('basic',420,500),spawn('shooter',950,220),spawn('armored',1000,500)],
   [Object.assign(spawn('shooter',700,240),{cluster:1}),Object.assign(spawn('basic',730,280),{cluster:1}),Object.assign(spawn('armored',760,320),{cluster:1}),spawn('basic',520,300),spawn('basic',600,470),spawn('basic',500,180),spawn('basic',600,380),spawn('basic',850,450)],
 ];
