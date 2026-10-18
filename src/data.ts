@@ -1,8 +1,9 @@
+import type { EnemyType } from './enemies/types';
+export type { EnemyType } from './enemies/types';
 export type Vec = { x: number; y: number };
 export type Rect = Vec & { w: number; h: number };
 export type Weapon = 'standard' | 'triple' | 'heavy';
 export type CharacterId = 'standard' | 'fire' | 'ice' | 'thunder';
-export type EnemyType = 'basic' | 'shooter' | 'armored' | 'boss';
 export const CONFIG = {
   width: 1120, height: 640, fixedStep: 1 / 120, playerSpeed: 205,
   playerRadius: 12, playerHP: 1, bulletSpeed: 285, bulletRadius: 4,
@@ -42,8 +43,8 @@ export const ABILITIES = [
 ] as const;
 export type Ability = typeof ABILITIES[number]['id'];
 export type Hazard = { type: 'moving_wall' | 'collapse'; rect: Rect; warningSeconds: number; period?: number; phase?: number; span?: number; axis?: 'x' | 'y' };
-export type EnemySpawn = { type: EnemyType; x: number; y: number; cluster?: number };
-export type ReinforcementWave = { types: Exclude<EnemyType, 'boss'>[]; anchors: Vec[]; clusterIds?: (number|null)[] };
+export type EnemySpawn = { type: EnemyType; x: number; y: number; cluster?: number; squad?: number };
+export type ReinforcementWave = { types: Exclude<EnemyType, 'boss'>[]; anchors: Vec[]; clusterIds?: (number|null)[]; squadIds?: (number|null)[] };
 export type Floor = { name: string; template: string; bounds: Rect; walls: Rect[]; enemies: EnemySpawn[]; reinforcements?: ReinforcementWave[]; enemyTarget?: number; hazards: Hazard[]; seed?: number; stage?: number; number?: number };
 const wall = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h });
 const spawn = (type: EnemyType, x: number, y: number) => ({ type, x, y });
