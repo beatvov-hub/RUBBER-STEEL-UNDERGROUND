@@ -27,7 +27,7 @@ for(let tick=0;tick<120*1500;tick++){
  if(game.state==='dead'){deaths++;if(sample)sample.deaths++;causes.set(game.deathCause,(causes.get(game.deathCause)??0)+1);if(deaths<=3){const fatal=game.fatalBullet;console.log('DEATH',deaths,game.floor+1,game.deathCause,'time',floorTime.toFixed(1),'shots',game.shots,'remaining',game.remaining,'pos',Math.round(game.player.x),Math.round(game.player.y),'fatal bullet',fatal?{x:Math.round(fatal.x),y:Math.round(fatal.y),vx:Math.round(fatal.vx),vy:Math.round(fatal.vy),age:Number(fatal.age.toFixed(2)),reflections:fatal.reflections,weapon:fatal.weapon??(fatal.heavy?'heavy':'standard')}:undefined,game.enemies.filter(e=>e.hp>0).map(e=>({type:e.type,x:Math.round(e.x),y:Math.round(e.y),armor:e.armor})));}if(deaths>=maxDeaths)break;game.retry();floorTime=0;shotClock=2;previousMove={x:0,y:0};}
  if(game.state==='choice'){const choice=abilityPolicy==='first'?game.choices[0]:abilityPolicy==='random'?game.choices[Math.floor(Math.random()*game.choices.length)]:game.choices.find(x=>x==='slow')??game.choices[0];abilityChoices.push(choice);game.choose(choice);}
  if(game.floor!==lastFloor){if(lastFloor>=0){clearTimes.push(floorTime);finishFloorSample();}lastFloor=game.floor;floorTime=0;shotClock=2;previousMove={x:0,y:0};sample={floor:game.floor+1,seconds:0,deaths:0,peakActive:game.activeRemaining,peakTotal:game.remaining,peakPlayerBullets:game.bullets.filter(b=>b.owner==='player').length,peakAllBullets:game.bullets.length};floorStart={fires:{...game.weaponFires},kills:{...game.weaponKills},rounds:{...weaponBullets},reflections:{...game.weaponReflections},rebounds:game.reflectionCount};console.log(`Pilot entered floor ${lastFloor+1}`);}
- floorTime+=CONFIG.fixedStep;shotClock+=CONFIG.fixedStep;if(floorTime>140){console.log('Pilot timed out',game.floor+1,game.remaining,game.player,game.enemies.filter(e=>e.hp>0).map(e=>({type:e.type,x:Math.round(e.x),y:Math.round(e.y)})),'route',route(game.enemies.find(e=>e.hp>0)??game.exit));break;}
+ floorTime+=CONFIG.fixedStep;shotClock+=CONFIG.fixedStep;if(floorTime>140){const target=game.enemies.filter(e=>e.hp>0).sort((a,b)=>dist(a,game.player)-dist(b,game.player))[0]??game.exit;console.log('Pilot timed out',game.floor+1,game.remaining,{player:game.player,target:{type:'type'in target?target.type:'exit',x:Math.round(target.x),y:Math.round(target.y),distance:Number(dist(target,game.player).toFixed(1)),visible:visible(game.player,target)},layout:{template:game.layout.template,walls:game.layout.walls,hazards:game.hazards.filter(h=>h.active||h.warning).map(h=>({type:h.source.type,rect:h.rect,warning:h.warning,active:h.active}))},route:route(target)},'enemies',game.enemies.filter(e=>e.hp>0).map(e=>({type:e.type,x:Math.round(e.x),y:Math.round(e.y),distance:Number(dist(e,game.player).toFixed(1))})));break;}
  dynamicBlockers=game.hazards.filter(h=>h.active||h.warning).map(h=>h.rect);
  const live=game.enemies.filter(e=>e.hp>0).sort((a,b)=>dist(a,game.player)-dist(b,game.player));const enemy=live.find(e=>visible(game.player,e))??live[0];const goal=enemy??game.exit;let aim:Vec=goal;
  if(policy==='triple'||policy==='heavy')game.setWeapon(policy);
@@ -38,16 +38,17 @@ for(let tick=0;tick<120*1500;tick++){
    if(game.weapon!==weapon)game.setWeapon(weapon);
  }
  if(enemy){const old=previousEnemies.get(enemy);if(old){const projectileSpeed=WEAPONS[game.weapon].speed*Math.pow(.85,game.stacks('slow')),flight=dist(enemy,game.player)/projectileSpeed;aim={x:enemy.x+(enemy.x-old.x)/CONFIG.fixedStep*flight*.8,y:enemy.y+(enemy.y-old.y)/CONFIG.fixedStep*flight*.8};}previousEnemies.set(enemy,{x:enemy.x,y:enemy.y});}
- const waypoint=visible(game.player,goal)?goal:route(goal);const desired={x:waypoint.x-game.player.x,y:waypoint.y-game.player.y};const len=Math.max(1,Math.hypot(desired.x,desired.y));desired.x/=len;desired.y/=len;
+ // Maze routes can require border corridors; in route mode, validated geometry takes priority over the soft edge-avoidance heuristic.
+ const routeNeeded=!enemy||!visible(game.player,enemy)||dist(enemy,game.player)>330;const waypoint=visible(game.player,goal)?goal:route(goal);const desired={x:waypoint.x-game.player.x,y:waypoint.y-game.player.y};const len=Math.max(1,Math.hypot(desired.x,desired.y));desired.x/=len;desired.y/=len;
  let best={x:0,y:0},bestScore=-Infinity;
  for(let k=-1;k<16;k++){const m=k<0?{x:0,y:0}:{x:Math.cos(k*Math.PI/8),y:Math.sin(k*Math.PI/8)};let score=0;const future={x:game.player.x+m.x*205*.12,y:game.player.y+m.y*205*.12};if(!free(future))continue;
- if(!enemy||!visible(game.player,enemy)||dist(enemy,game.player)>330)score=(m.x*desired.x+m.y*desired.y)*2;
+ if(routeNeeded)score=(m.x*desired.x+m.y*desired.y)*4;
  else if(dist(enemy,game.player)<75)score=-(m.x*desired.x+m.y*desired.y)*2;
  else{const alignment=m.x*desired.x+m.y*desired.y,cross=m.x*desired.y-m.y*desired.x,orbitSign=enemy?.type==='shooter'?-1:1;score=1-Math.abs(alignment)+alignment*.12+cross*.24*orbitSign+(m.x*previousMove.x+m.y*previousMove.y)*.3;}
  if(k<0)score-=2;
  for(const e of live)if(visible(future,e)){const d=dist(future,e);score-=Math.max(0,120-d)/9;}
  // Keep escape lanes open: the entry is near two room edges, and cornering leaves too few options for dodging returning rounds.
- if(enemy){const bounds=game.layout.bounds,edgeClearance=[future.x-bounds.x,bounds.x+bounds.w-future.x,future.y-bounds.y,bounds.y+bounds.h-future.y];
+ if(enemy&&!routeNeeded){const bounds=game.layout.bounds,edgeClearance=[future.x-bounds.x,bounds.x+bounds.w-future.x,future.y-bounds.y,bounds.y+bounds.h-future.y];
    for(const clearance of edgeClearance)score-=Math.max(0,90-clearance)/4;
  }
  for(const b of game.bullets){if(!b.armed)continue;const rx=b.x-game.player.x,ry=b.y-game.player.y,vx=b.vx-m.x*205,vy=b.vy-m.y*205;const t=Math.max(0,Math.min(.5,-(rx*vx+ry*vy)/(vx*vx+vy*vy)));const d=Math.hypot(rx+vx*t,ry+vy*t);score-=Math.max(0,52-d)/4;}

@@ -171,7 +171,7 @@ export class Renderer {
             if(Math.abs(e.x-gutterX)>100&&!blocked(gutterName)&&!blocked(gutterBar)){infoX=gutterX;barY=gutterBarY;nameY=gutterNameY;}
             else{barY=e.y+46;nameY=e.y+63;const candidates=Array.from({length:46},(_,index)=>100+index*20).sort((a,b)=>Math.abs(a-e.x)-Math.abs(b-e.x));infoX=candidates.find(x=>{const nameBox={x:x-halfName,y:nameY-13,w:halfName*2,h:17},barBox={x:x-40,y:barY-2,w:80,h:8};return !blocked(nameBox)&&!blocked(barBox);})??e.x;}
           }
-          shape(ctx,infoX-40,barY,80,4,2,'#203541');shape(ctx,infoX-40,barY,80*e.hp/game.bossSpec.hp,4,2,'#e59a87');this.label(ctx,bossName,infoX,nameY,'#eac6b9',10,'center');if(e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(e.x,e.y,43+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();}
+          shape(ctx,infoX-40,barY,80,4,2,'#203541');shape(ctx,infoX-40,barY,80*e.hp/game.bossSpec.hp,4,2,'#e59a87');this.label(ctx,bossName,infoX,nameY,'#eac6b9',10,'center');if(e.timer<.65){ctx.strokeStyle='#ffd08cdd';ctx.lineWidth=1.8;ctx.beginPath();ctx.arc(e.x,e.y,43+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();this.label(ctx,'BOSS FIRE',e.x,e.y-49,'#ffe0b5',8,'center');}
         }
         if(e.type==='shooter'&&e.hp>0&&e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(e.x,e.y,23+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();this.label(ctx,'FIRE',e.x,e.y-27,'#ffd0b8',7,'center');}}
       // A precise faint footprint keeps collision location readable under the taller soldier.
