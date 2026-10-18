@@ -920,5 +920,6 @@ h1 {
 .debug-heading small { color:#d8bdba; }
 .debug-panel button,.debug-panel input,.debug-panel select { background:#382a34; color:#ffe2d7; border:1px solid #bd8996; border-radius:3px; padding:3px; font:inherit; }
 .debug-panel input[type=number] { width:56px; }
+.debug-panel #debug-enemies { width:min(220px,45vw); height:64px; }
 .debug-panel label { display:flex; align-items:center; gap:4px; }
 .debug-panel output { flex:1 1 100%; overflow-wrap:anywhere; line-height:1.5; }

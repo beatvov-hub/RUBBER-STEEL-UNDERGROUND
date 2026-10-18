@@ -1,4 +1,6 @@
 import { CONFIG, FLOORS, type EnemySpawn, type EnemyType, type Floor, type Hazard, type Rect, type Vec } from './data';
+import { ENEMY_TYPES } from './enemies/types';
+import { enemyDefinition } from './enemies/definitions';
 
 export const AREA_NAMES = ['ENTRY SECTOR', 'INDUSTRIAL SECTOR', 'EXPERIMENT SECTOR', 'CONTAINMENT FAILURE', 'RUBBER STEEL CORE'] as const;
 export const INITIAL_ENEMY_CAP = 12;
@@ -80,7 +82,9 @@ export function enemyTargetFor(stage:number,number:number):number {
   return Math.max(target,previous+lateAreaBossAdds);
 }
 function enemyTypesFor(stage:number,number:number,count:number,rng:()=>number,pool:EnemyType[]):EnemyType[]{
-  const elite=number===10,types=Array.from({length:count},(_,i)=>elite&&i===0?'boss':pool[Math.floor(rng()*pool.length)] as EnemyType);
+  const eligible=ENEMY_TYPES.filter(type=>type!=='boss'&&enemyDefinition(type).unlockStage<=stage),legacy=pool.filter(type=>enemyDefinition(type).unlockStage<=stage);
+  const expanded=[...legacy,...eligible.filter(type=>!legacy.includes(type)).flatMap(type=>Array( Math.max(1,Math.round(1.8/Math.max(1,enemyDefinition(type).unlockStage/10)))).fill(type))] as EnemyType[];
+  const elite=number===10,types=Array.from({length:count},(_,i)=>elite&&i===0?'boss':expanded[Math.floor(rng()*expanded.length)] as EnemyType);
   if(stage<21||!elite)return types;
   const armoredQuota=Math.ceil((count-1)*.5);let armored=types.filter((type,index)=>index>0&&type==='armored').length;
   for(let i=1;i<types.length&&armored<armoredQuota;i++)if(types[i]!=='armored'){types[i]='armored';armored++;}
@@ -100,7 +104,7 @@ function groupReinforcements(spawns:EnemySpawn[]) {
   const reinforcements:NonNullable<Floor['reinforcements']>=[];
   for(let start=0;start<spawns.length;start+=REINFORCEMENT_WAVE_SIZE){
     const wave=spawns.slice(start,start+REINFORCEMENT_WAVE_SIZE);
-    reinforcements.push({types:wave.map(e=>e.type as Exclude<EnemyType,'boss'>),anchors:wave.map(({x,y})=>({x,y})),clusterIds:wave.map(e=>e.cluster??null)});
+    reinforcements.push({types:wave.map(e=>e.type as Exclude<EnemyType,'boss'>),anchors:wave.map(({x,y})=>({x,y})),clusterIds:wave.map(e=>e.cluster??null),squadIds:wave.map(e=>e.squad??null)});
   }
   return reinforcements;
 }
@@ -108,6 +112,7 @@ function composeFloorEnemies(all:EnemySpawn[]) {
   const enemies=all.slice(0,INITIAL_ENEMY_CAP), reinforcements=groupReinforcements(all.slice(INITIAL_ENEMY_CAP));
   return {enemies,reinforcements:reinforcements.length?reinforcements:undefined};
 }
+function capSpecialEnemies(spawns:EnemySpawn[]){const used=new Map<EnemyType,number>();for(const enemy of spawns){const definition=enemyDefinition(enemy.type),count=used.get(enemy.type)??0;if(count>=definition.maxPerFloor){const fallback=(['basic','shooter','armored'] as EnemyType[]).find(type=>(used.get(type)??0)<enemyDefinition(type).maxPerFloor)??'basic';enemy.type=fallback;used.set(fallback,(used.get(fallback)??0)+1);}else used.set(enemy.type,count+1);}}
 export function reachable(floor:Floor, blocked:Rect[]=[]):Set<string> {
   const grid=12,r=CONFIG.playerRadius+2,b=floor.bounds,walls=[...floor.walls,...blocked];
   const start=entryOf(b), sx=Math.round(start.x/grid),sy=Math.round(start.y/grid), key=(x:number,y:number)=>`${x},${y}`;
@@ -184,7 +189,8 @@ function candidate(stage:number,number:number,attempt:number):Floor {
     for(let tries=0;tries<360;tries++){
       const x=bounds.x+90+rng()*(bounds.w-180),y=bounds.y+70+rng()*(bounds.h-140),p={x,y};
       if(Math.hypot(x-entryOf(bounds).x,y-entryOf(bounds).y)<180||Math.hypot(x-exitOf(bounds).x,y-exitOf(bounds).y)<65)continue;
-      if(!clear(p,type==='boss'?36:21,bounds,walls)||allEnemies.some(e=>Math.hypot(e.x-x,e.y-y)<65)||hazards.some(h=>circleRect(p,28,hazardEnvelope(h))))continue;
+      const radius=enemyDefinition(type).radius;
+      if(!clear(p,radius+6,bounds,walls)||allEnemies.some(e=>Math.hypot(e.x-x,e.y-y)<65)||hazards.some(h=>circleRect(p,radius+7,hazardEnvelope(h))))continue;
       allEnemies.push({type,x:Math.round(x),y:Math.round(y)});break;
     }
   };
@@ -212,13 +218,15 @@ function candidate(stage:number,number:number,attempt:number):Floor {
         if(!bestEntryCluster||visible>bestEntryCluster.visible||visible===bestEntryCluster.visible&&Math.abs(distance-300)<Math.abs(bestEntryCluster.distance-300))bestEntryCluster={positions,visible,distance};
         if(visible<2||distance<200||distance>400)continue;
       }
-      const id=++clusterId;for(let i=0;i<3;i++)allEnemies.push({...positions[i],type:groupTypes[i],cluster:id});placed=true;
+      const id=++clusterId,pack=groupTypes.includes('pack_runner')&&allEnemies.filter(enemy=>enemy.type==='pack_runner').length+3<=enemyDefinition('pack_runner').maxPerFloor;for(let i=0;i<3;i++)allEnemies.push({...positions[i],type:pack?'pack_runner':groupTypes[i],cluster:id,squad:pack?id:undefined});placed=true;
     }
     if(!placed&&group===0&&bestEntryCluster){const id=++clusterId;for(let i=0;i<3;i++)allEnemies.push({...bestEntryCluster.positions[i],type:groupTypes[i],cluster:id});placed=true;}
     if(!placed)for(const type of groupTypes)placeSingle(type);
   }
   for(;typeIndex<types.length;typeIndex++)placeSingle(types[typeIndex]);
-  const {enemies,reinforcements}=composeFloorEnemies(allEnemies);
+  const tetherGuards=allEnemies.filter(enemy=>enemy.type==='tether_guard');if(tetherGuards.length%2) tetherGuards.pop()!.type='pack_runner';for(let i=0;i<tetherGuards.length;i+=2){const squad=100000+stage*10+number*100+i;tetherGuards[i].squad=squad;tetherGuards[i+1].squad=squad;}
+  if(elite&&stage>=21){const support=allEnemies.filter(enemy=>enemy.type!=='boss'),quota=Math.ceil((support.length)*.5);let armored=support.filter(enemy=>enemy.type==='armored').length;for(const enemy of support.filter(enemy=>enemy.cluster===undefined))if(armored<quota&&enemy.type!=='armored'){enemy.type='armored';armored++;}for(const enemy of support)if(armored<quota&&enemy.type!=='armored'){enemy.type='armored';armored++;}}
+  capSpecialEnemies(allEnemies);const {enemies,reinforcements}=composeFloorEnemies(allEnemies);
   return {name:elite?(info.boss==='final'?'FINAL TEST':info.boss==='area'?'AREA CORE':'ELITE CHAMBER'):`${info.name} / ${String(number).padStart(2,'0')}`,
     template,bounds,walls,enemies,reinforcements,enemyTarget:enemyCount,hazards,seed,stage,number};
 }
@@ -235,11 +243,11 @@ function safeFloor(stage:number,number:number):Floor {
     for(let attempt=0;attempt<1500;attempt++){
       const x=BOUNDS.x+90+rng()*(BOUNDS.w-180),y=BOUNDS.y+70+rng()*(BOUNDS.h-140),p={x,y};
       if(Math.hypot(x-entryOf(BOUNDS).x,y-entryOf(BOUNDS).y)<180||Math.hypot(x-exitOf(BOUNDS).x,y-exitOf(BOUNDS).y)<65)continue;
-      if(all.some(e=>Math.hypot(e.x-x,e.y-y)<65)||hazards.some(h=>circleRect(p,28,hazardEnvelope(h))))continue;
+      if(all.some(e=>Math.hypot(e.x-x,e.y-y)<76)||hazards.some(h=>circleRect(p,28,hazardEnvelope(h))))continue;
       all.push({type,x:Math.round(x),y:Math.round(y)});break;
     }
   }
-  const {enemies,reinforcements}=composeFloorEnemies(all);
+  capSpecialEnemies(all);const {enemies,reinforcements}=composeFloorEnemies(all);
   return {name:elite?'ELITE CHAMBER':`${info.name} / SAFE CHAMBER`,template:'OPEN_ROOM',bounds:BOUNDS,walls:[],
     enemies,reinforcements,enemyTarget:target,hazards,seed:seedOf(stage,number,999),stage,number};
 }

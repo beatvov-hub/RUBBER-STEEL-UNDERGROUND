@@ -2,6 +2,7 @@ import { CHARACTERS, CONFIG, type Vec, type Rect } from '../data';
 import { STAGES } from '../world';
 import { circleRect, type Game, type Enemy, type Effect } from '../engine';
 import { drawSoldier, shape } from './soldier';
+import { enemyDefinition } from '../enemies/definitions';
 
 type Particle = Vec & { vx:number; vy:number; life:number; max:number; color:string; size:number; kind:'spark'|'case'|'dust'|'plate' };
 type Impact = Vec & { life:number; max:number; armor:boolean; direction:number };
@@ -123,14 +124,14 @@ export class Renderer {
     if(e.hp<=0)m.death+=dt;m.hp=e.hp;m.x=e.x;m.y=e.y;return m;
   }
   private bullet(b:Game['bullets'][number]){
-    const ctx=this.ctx,player=b.owner==='player',color=player?'#b5efff':'#ff9776';
+    const ctx=this.ctx,player=b.owner==='player',ricochet=b.source==='ricochet_gunner',color=player?'#b5efff':ricochet?'#d3a0ff':'#ff9776';
     // Tracer segments are cut at large discontinuities, so reflections never draw across steel.
     ctx.strokeStyle=color;ctx.lineWidth=player?b.radius*.55:1.5;ctx.lineCap='round';ctx.globalAlpha=.45;ctx.beginPath();
     for(let i=0;i<b.trail.length;i++){const p=b.trail[i],last=b.trail[i-1];if(!last||Math.hypot(p.x-last.x,p.y-last.y)>10)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);}ctx.stroke();ctx.globalAlpha=1;
     ctx.drawImage(player?this.glow:this.redGlow,b.x-13-b.radius,b.y-13-b.radius,26+b.radius*2,26+b.radius*2);
     ctx.save();ctx.translate(b.x,b.y);ctx.rotate(Math.atan2(b.vy,b.vx));
     if(player){shape(ctx,-b.radius*1.7,-b.radius*.6,b.radius*2.6,b.radius*1.2,b.radius*.5,'#effcff');shape(ctx,-b.radius*1.5,-b.radius*.35,b.radius*1.5,b.radius*.7,1,'#8bdef5');}
-    else{ctx.fillStyle='#ff9b76';ctx.beginPath();ctx.moveTo(b.radius+1,0);ctx.lineTo(0,-b.radius);ctx.lineTo(-b.radius-1,0);ctx.lineTo(0,b.radius);ctx.closePath();ctx.fill();shape(ctx,-1,-1,3,2,1,'#ffe3bb');}
+    else{ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(b.radius+1,0);ctx.lineTo(0,-b.radius);ctx.lineTo(-b.radius-1,0);ctx.lineTo(0,b.radius);ctx.closePath();ctx.fill();shape(ctx,-1,-1,3,2,1,ricochet?'#f4e3ff':'#ffe3bb');}
     ctx.restore();
   }
   private observeEffects(game:Game){
@@ -162,7 +163,17 @@ export class Renderer {
     if(title)this.titleScene();else{
       const sorted=[...game.enemies].sort((a,b)=>a.y-b.y);
       for(const e of sorted){const motion=this.motion(e,animDt);if(e.hp<=0&&motion.death>.65)continue;
-        drawSoldier(ctx,{position:e,aim:Math.atan2(p.y-e.y,p.x-e.x),move:{x:Math.cos(motion.angle),y:Math.sin(motion.angle)},time:this.time,running:motion.speed>1&&active,role:e.type,armor:e.armor,hit:e.hit*4,death:e.hp<=0?motion.death:0});
+        const hopHeight=e.type==='hopper'&&e.behavior?.mode==='hop'?Math.sin(this.time*11)*6:0;
+        drawSoldier(ctx,{position:{x:e.x,y:e.y-hopHeight},aim:Math.atan2(p.y-e.y,p.x-e.x),move:{x:Math.cos(motion.angle),y:Math.sin(motion.angle)},time:this.time,running:motion.speed>1&&active,role:e.type,accent:enemyDefinition(e.type).color,armor:e.armor,hit:e.hit*4,death:e.hp<=0?motion.death:0,alpha:e.type==='phase_shift'&&e.behavior?.mode==='phase' ? 0.34 : 1});
+        if(e.type==='dasher'&&e.hp>0&&e.behavior?.mode==='windup'&&e.behavior.heading){ctx.strokeStyle='#ff8066cc';ctx.lineWidth=3;ctx.setLineDash([10,7]);ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x+e.behavior.heading.x*210,e.y+e.behavior.heading.y*210);ctx.stroke();ctx.setLineDash([]);this.label(ctx,'DASH',e.x+e.behavior.heading.x*100,e.y+e.behavior.heading.y*100-8,'#ffd2bf',9,'center');}
+        if(e.type==='hopper'&&e.hp>0&&e.behavior?.landing){ctx.strokeStyle='#e5d58c99';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.beginPath();ctx.arc(e.behavior.landing.x,e.behavior.landing.y,27,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);this.label(ctx,'LAND',e.behavior.landing.x,e.behavior.landing.y+4,'#fff0bd',8,'center');}
+        if(e.type==='front_shield'&&e.hp>0){const angle=Math.atan2(e.behavior?.heading?.y??0,e.behavior?.heading?.x??1);ctx.save();ctx.translate(e.x,e.y);ctx.rotate(angle);shape(ctx,10,-12,8,24,3,'#729eae','#d7eff4');ctx.restore();}
+        if(e.type==='moving_mirror'&&e.hp>0&&e.behavior?.mirror){const mirror=e.behavior.mirror;ctx.strokeStyle='#e2ffff';ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(mirror.x-15,mirror.y-7);ctx.lineTo(mirror.x+15,mirror.y+7);ctx.stroke();ctx.strokeStyle='#72c3ce';ctx.lineWidth=2;ctx.stroke();}
+        if(e.type==='phase_shift'&&e.behavior?.mode==='phase'){ctx.strokeStyle='#c6d4ff88';ctx.lineWidth=2;ctx.setLineDash([3,4]);ctx.beginPath();ctx.arc(e.x,e.y,e.radius+7,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
+        if(e.type==='trigger_hound'&&(e.behavior?.triggerBoost??0)>0){ctx.strokeStyle='#ff6d5dcc';ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(e.x,e.y,e.radius+9+Math.sin(this.time*12)*2,0,Math.PI*2);ctx.stroke();this.label(ctx,'RAGE',e.x,e.y-30,'#ffb49e',8,'center');}
+        if(e.type==='repair_bot'&&e.behavior?.targetEnemyId!==undefined){const target=game.enemies[e.behavior.targetEnemyId];if(target?.hp>0){ctx.strokeStyle='#8be1cb99';ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(target.x,target.y);ctx.stroke();ctx.setLineDash([]);}}
+        if(['burst_gunner','triple_gunner','ricochet_gunner','arc_launcher'].includes(e.type)&&e.hp>0&&e.timer<.65){ctx.strokeStyle='#ffbd8caa';ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,e.y,e.radius+9+Math.sin(this.time*12)*2,0,Math.PI*2);ctx.stroke();this.label(ctx,e.type==='triple_gunner'?'3-LINE':e.type==='ricochet_gunner'?'RICOCHET':'FIRE',e.x,e.y-30,'#ffe0c1',8,'center');}
+        if(e.type==='magnetizer'||e.type==='accelerator'||e.type==='slow_field'||e.type==='prism_splitter'||e.type==='bullet_orbiter'){const colors:Record<string,string>={magnetizer:'#d0a9ef66',accelerator:'#ffbd7466',slow_field:'#7fdbed55',prism_splitter:'#c3b4fa66',bullet_orbiter:'#e2a8f555'};ctx.strokeStyle=colors[e.type];ctx.lineWidth=1.2;ctx.setLineDash([4,5]);ctx.beginPath();ctx.arc(e.x,e.y,e.type==='bullet_orbiter'?118:95,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
         if(e.type==='boss'&&e.hp>0){
           const bossName=game.stage%10===0?game.bossSpec.name:'ELITE REFLECTOR';let infoX=e.x,barY=e.y-61,nameY=e.y-68;
           if(e.y<180){
@@ -174,6 +185,10 @@ export class Renderer {
           shape(ctx,infoX-40,barY,80,4,2,'#203541');shape(ctx,infoX-40,barY,80*e.hp/game.bossSpec.hp,4,2,'#e59a87');this.label(ctx,bossName,infoX,nameY,'#eac6b9',10,'center');if(e.timer<.65){ctx.strokeStyle='#ffd08cdd';ctx.lineWidth=1.8;ctx.beginPath();ctx.arc(e.x,e.y,43+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();this.label(ctx,'BOSS FIRE',e.x,e.y-49,'#ffe0b5',8,'center');}
         }
         if(e.type==='shooter'&&e.hp>0&&e.timer<.65){ctx.strokeStyle='#ffb78baa';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(e.x,e.y,23+Math.sin(this.time*14)*2,0,Math.PI*2);ctx.stroke();this.label(ctx,'FIRE',e.x,e.y-27,'#ffd0b8',7,'center');}}
+      const tetherPairs=new Map<number,typeof game.enemies>();for(const enemy of game.enemies)if(enemy.hp>0&&enemy.type==='tether_guard'&&enemy.squad!==undefined)tetherPairs.set(enemy.squad,[...(tetherPairs.get(enemy.squad)??[]),enemy]);for(const pair of tetherPairs.values())if(pair.length===2&&Math.hypot(pair[0].x-pair[1].x,pair[0].y-pair[1].y)<340){ctx.strokeStyle='#f0a5bc99';ctx.lineWidth=2;ctx.setLineDash([8,7]);ctx.beginPath();ctx.moveTo(pair[0].x,pair[0].y);ctx.lineTo(pair[1].x,pair[1].y);ctx.stroke();ctx.setLineDash([]);}
+      for(const field of game.enemyFields){ctx.fillStyle=field.kind==='mine'?'#e2a45844':'#b77a5966';ctx.strokeStyle=field.kind==='mine'?'#ffd483':'#e3ad7f';ctx.lineWidth=2;ctx.fillRect(field.rect.x,field.rect.y,field.rect.w,field.rect.h);ctx.strokeRect(field.rect.x,field.rect.y,field.rect.w,field.rect.h);if(field.kind==='mine')this.label(ctx,field.arm?'ARMING':'MINE',field.rect.x+field.rect.w/2,field.rect.y-6,'#ffe0a9',8,'center');}
+      for(const warning of game.attackWarnings){ctx.strokeStyle=warning.kind==='SNIPER'?'#fb7889bb':'#ffbd7777';ctx.lineWidth=2;ctx.setLineDash([7,6]);ctx.beginPath();if(['SNIPER','BURST','TRIPLE_GUNNER'].includes(warning.kind)){const owner=game.enemies[warning.owner],length=warning.kind==='SNIPER'?1500:410;if(owner){if(warning.kind==='TRIPLE_GUNNER')for(const offset of[-.2,0,.2]){ctx.moveTo(owner.x,owner.y);ctx.lineTo(owner.x+Math.cos((warning.angle??0)+offset)*length,owner.y+Math.sin((warning.angle??0)+offset)*length);}else{ctx.moveTo(owner.x,owner.y);ctx.lineTo(owner.x+Math.cos(warning.angle??0)*length,owner.y+Math.sin(warning.angle??0)*length);}}}else ctx.arc(warning.x,warning.y,warning.radius,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);if(warning.kind==='SHOCKWAVE'){ctx.strokeStyle='#b5e2aabb';ctx.lineWidth=5;ctx.beginPath();ctx.arc(warning.x,warning.y,warning.radius,warning.angle!-.42,warning.angle!+.42);ctx.stroke();}if(!['SNIPER','BURST','TRIPLE_GUNNER'].includes(warning.kind))this.label(ctx,`${warning.kind} ${warning.life.toFixed(1)}`,warning.x,warning.y,'#ffe2c6',9,'center');}
+      for(const decoy of game.enemyDecoys){ctx.save();ctx.globalAlpha=.42;drawSoldier(ctx,{position:decoy,aim:0,move:{x:0,y:0},time:this.time,running:false,role:'basic',accent:'#b5a6db'});ctx.restore();}
       // A precise faint footprint keeps collision location readable under the taller soldier.
       ctx.strokeStyle='#e2e9db44';ctx.lineWidth=1;ctx.beginPath();ctx.arc(p.x,p.y,CONFIG.playerRadius,0,Math.PI*2);ctx.stroke();
       drawSoldier(ctx,{position:p,aim:Math.atan2(aim.y-p.y,aim.x-p.x),move:{x:Math.cos(m.angle),y:Math.sin(m.angle)},time:this.time,running:m.speed>2&&active,role:'player',character:game.character,accent:CHARACTERS[game.character].accent,weapon:game.weapon,recoil:this.recoil,hit:m.flash*this.flashScale,death:m.death});

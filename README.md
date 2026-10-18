@@ -63,7 +63,19 @@ npm run dev
 
 初期配置は最大12体です。残りの敵は、場に残る敵が4体以下になってから最大6体ずつ増援として参加します。増援後の同時数は最大10体なので、初期配置を含むライブ敵数は12体を超えません。出現場所は約2秒前に予告され、プレイヤーや既存の敵、稼働中のギミックに近い地点は安全な距離が取れるまで延期されます。生成フロアの最初の3体組は、入口から2体以上を見通せる範囲へ優先配置します。複数体を一度に攻撃する機会と、跳弾が増える危険の両方を生みます。
 
-敵には近接型、射撃型、装甲型、ボスがいます。装甲型はHP 2で、最初の弾を反射します。部屋によっては予告付きで動く壁や崩落床が現れるため、敵だけでなく移動経路と安全な立ち位置も確認してください。
+敵は既存4種に新規32種を加えた計36種です。新しいタイプは解禁ステージ以降の床へ段階的に登場し、序盤の操作学習と既存の500フロアの敵数・増援上限は維持しています。強い攻撃には照準線、着弾円、突進線、着地点などの予告があります。
+
+| エリア | 主な新敵と攻略の着眼点 |
+| --- | --- |
+| ENTRY SECTOR | **ZIGZAG**と**PACK RUNNER**で狙いを考え、**DASHER**と**TRIPLE GUNNER**で移動・射撃方向を学びます。 |
+| INDUSTRIAL SECTOR | **FLANKER**、発砲に反応する**TRIGGER HOUND**、**FRONT SHIELD**、**HUNKER**、修復役や各種銃手、地雷で位置取りと武器選択が重要になります。 |
+| EXPERIMENT SECTOR | **HOPPER**、**PHASE SHIFT**、**SPLITTER**、**DECOY PROJECTOR**と迫撃・衝撃波・散弾型の敵が射撃のタイミングを揺さぶります。 |
+| CONTAINMENT FAILURE | **MAGNETIZER**、**ACCELERATOR**、**SLOW FIELD**、**PRISM SPLITTER**、**MOVING MIRROR**が自弾へ干渉し、**WALL BUILDER**や**SHUTTER OPERATOR**が射線を変えます。 |
+| RUBBER STEEL CORE | **BULLET ORBITER**、**ECHO STALKER**、連結攻撃をする**TETHER GUARDS**を含め、解禁済みの敵が複合して登場します。 |
+
+全新敵のIDは**DASHER、FLANKER、TRIGGER HOUND、PACK RUNNER、HOPPER、ZIGZAG、FRONT SHIELD、PHASE SHIFT、SPLITTER、REPAIR BOT、DECOY PROJECTOR、HUNKER、BURST GUNNER、TRACKING SNIPER、MORTAR、SHOCKWAVER、ARC LAUNCHER、MINE LAYER、MAGNETIZER、ACCELERATOR、SLOW FIELD、PRISM SPLITTER、MOVING MIRROR、BULLET ORBITER、WALL BUILDER、SHUTTER OPERATOR、REINFORCEMENT BEACON、SQUAD COMMANDER、TETHER GUARDS、ECHO STALKER、TRIPLE GUNNER、RICOCHET GUNNER**です。FRONT SHIELDは向きで自弾を反射し、装甲敵のように初弾で壊れません。PHASE SHIFT中の敵は弾を通し、SPLITTERの子敵も全滅判定に含みます。自弾を曲げる・加速する・減速する・分裂させる・周回させる敵がいても、自弾の所有者、壁反射、永久残存、自分への当たり判定は変わりません。敵弾は通常の寿命と総弾数上限に従い、RICOCHET GUNNERの弾も反射は最大2回です。
+
+増援要請は既存フロアの総敵数予算内に限られ、子敵や増援を含めて出口の解放を判定します。部屋によっては予告付きの一時壁、シャッター、地雷、可動壁、崩落床が現れるため、敵だけでなく移動経路と安全な立ち位置も確認してください。
 
 ## 武器
 
@@ -151,17 +163,18 @@ Windows版ZIPは`npm run package:win`で`release/`へ生成できます。Playwr
 
 - `src/data.ts` — ゲーム定数、初期フロア、キャラクター、武器、一時能力。
 - `src/world.ts` — 5エリアと50ステージ、シード付きフロア生成、敵配置と到達性検証。
+- `src/enemies/` — 敵32種の識別子と定義、移動AI、自弾に作用する特殊フィールド。
 - `src/engine.ts` — 固定120Hzのゲーム進行、敵AI、弾・装甲・増援・ギミック・ステージ進行。
 - `src/save.ts` — ブラウザー保存、旧セーブの移行、ステージとキャラクターの解禁。
 - `src/main.ts` — 入力、メニュー、設定、Web Audio、Canvas描画との接続。
 - `src/visuals/` — エリア、兵士、弾道、反射、発光、能力アイコンの描画。
 - `electron/main.cjs` — Windowsデスクトップ版。
-- `tests/`、`scripts/` — ルール・コンテンツ・ブラウザー・モバイル・デスクトップ検証。
+- `tests/`、`scripts/` — ルール・敵別行動・コンテンツ・ブラウザー・モバイル・デスクトップ検証。
 - `images/` — ゲームのキービジュアルと生成プロンプト。
 
 フロアは部屋テンプレート、敵構成、可動壁・崩落床を組み合わせて決定的に生成し、敵・出口への経路やギミックの安全性を検査します。自弾は時間や反射回数では消えず、敵への命中またはフロア移動時に消去されます。
 
-ブラウザーでURL末尾に`?debug=1`を付けると、DEBUG MODEが開きます（例：`https://rubber-steel-underground.vercel.app/?debug=1`）。ステージ・フロア・キャラクターを指定して開始でき、無敵、ヒットボックス、敵・増援数、武器別の射撃・撃破・跳弾数、弾数、シード、フォールバック状態、描画時間も確認できます。デバッグプレイは進行、死亡数、クリアタイムに記録されず、ステージやキャラクターの解放状態も変わりません。通常版はクエリを外して開いてください。
+ブラウザーでURL末尾に`?debug=1`を付けると、DEBUG MODEが開きます（例：`https://rubber-steel-underground.vercel.app/?debug=1`）。ステージ・フロア・キャラクターを指定して開始でき、敵タイプを複数選んで安全な位置へ配置し、単体・組み合わせの行動を試せます。無敵、ヒットボックス、行動状態、敵・増援数、武器別の射撃・撃破・跳弾数、弾数、シード、フォールバック状態、描画時間も確認できます。デバッグプレイは進行、死亡数、クリアタイムに記録されず、ステージやキャラクターの解放状態も変わりません。通常版はクエリを外して開いてください。
 
 ## 配布前に確認すること
 

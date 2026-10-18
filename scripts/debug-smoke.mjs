@@ -23,6 +23,12 @@ try{
   assert.match(await page.locator('#debug-stats').textContent(),/REBOUNDS S\/T\/H/);
   assert.match(await page.locator('#debug-stats').textContent(),/RENDER .*ms/);
   assert.match(await page.locator('.vital-label').textContent(),/THUNDER/);
+  await page.locator('#debug-enemies').selectOption(['dasher','phase_shift','ricochet_gunner']);
+  await page.locator('#debug-spawn-enemies').click();await page.waitForTimeout(200);
+  const enemyStats=await page.locator('#debug-stats').textContent();
+  for(const type of ['dasher','phase_shift','ricochet_gunner'])assert.ok(enemyStats.includes(type),`debug enemy test omitted ${type}: ${enemyStats}`);
+  await page.screenshot({path:'artifacts/enemy-debug-test.png'});
+  await page.locator('#debug-stage').fill('50');await page.locator('#debug-floor').fill('10');await page.locator('#debug-jump').click();
   await page.keyboard.press('2');
   const bounds=await page.locator('#game').boundingBox();
   await page.mouse.move(bounds.x+bounds.width*.48,bounds.y+bounds.height*.48);await page.mouse.down();
@@ -47,5 +53,5 @@ try{
   }
   const normal=await browser.newPage();await normal.goto(target.url);assert.equal(await normal.locator('#debug').count(),0,'debug controls must require ?debug=1');
   await normal.locator('#stage-select').click();assert.equal(await normal.locator('[data-stage="50"]').isDisabled(),true,'normal stage progression must remain locked');
-  assert.deepEqual(errors,[]);console.log('Debug mode PASS: stage/floor jump, character, invincibility, hitboxes and stats controls; normal progression remains locked and debug saves are unchanged.');
+  assert.deepEqual(errors,[]);console.log('Debug mode PASS: stage/floor jump, individual and combined enemy test spawning, character, invincibility, hitboxes and stats controls; normal progression remains locked and debug saves are unchanged.');
 }finally{await browser?.close();await target.close();}
