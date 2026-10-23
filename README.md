@@ -63,17 +63,32 @@ npm run dev
 
 初期配置は最大12体です。残りの敵は、場に残る敵が4体以下になってから最大6体ずつ増援として参加します。増援後の同時数は最大10体なので、初期配置を含むライブ敵数は12体を超えません。出現場所は約2秒前に予告され、プレイヤーや既存の敵、稼働中のギミックに近い地点は安全な距離が取れるまで延期されます。生成フロアの最初の3体組は、入口から2体以上を見通せる範囲へ優先配置します。複数体を一度に攻撃する機会と、跳弾が増える危険の両方を生みます。
 
-敵は既存4種に新規32種を加えた計36種です。新しいタイプは解禁ステージ以降の床へ段階的に登場し、序盤の操作学習と既存の500フロアの敵数・増援上限は維持しています。強い攻撃には照準線、着弾円、突進線、着地点などの予告があります。
+敵は既存4種と追加42種の計46種です。10種の高圧力アーキタイプはステージ13から41にかけて段階解禁し、序盤の操作学習を保ちます。フロアの総敵数・増援上限は維持し、高圧力アーキタイプは1フロア最大3体、入口から見えるTRIPLE向けクラスター内は最大1体に制限しています。攻撃には照準線、着弾円、突進線、出現地点などの予告があります。
 
 | エリア | 主な新敵と攻略の着眼点 |
 | --- | --- |
 | ENTRY SECTOR | **ZIGZAG**と**PACK RUNNER**で狙いを考え、**DASHER**と**TRIPLE GUNNER**で移動・射撃方向を学びます。 |
-| INDUSTRIAL SECTOR | **FLANKER**、発砲に反応する**TRIGGER HOUND**、**FRONT SHIELD**、**HUNKER**、修復役や各種銃手、地雷で位置取りと武器選択が重要になります。 |
-| EXPERIMENT SECTOR | **HOPPER**、**PHASE SHIFT**、**SPLITTER**、**DECOY PROJECTOR**と迫撃・衝撃波・散弾型の敵が射撃のタイミングを揺さぶります。 |
-| CONTAINMENT FAILURE | **MAGNETIZER**、**ACCELERATOR**、**SLOW FIELD**、**PRISM SPLITTER**、**MOVING MIRROR**が自弾へ干渉し、**WALL BUILDER**や**SHUTTER OPERATOR**が射線を変えます。 |
-| RUBBER STEEL CORE | **BULLET ORBITER**、**ECHO STALKER**、連結攻撃をする**TETHER GUARDS**を含め、解禁済みの敵が複合して登場します。 |
+| INDUSTRIAL SECTOR | **FLANKER**や**TRIGGER HOUND**が追い込み、**CLUSTER BOMBER**は短い起爆予告で移動を迫ります。**GUARDIAN**の装甲パルスと**SENTINEL**の回転射線は優先目標の判断を変えます。 |
+| EXPERIMENT SECTOR | **HOPPER**、**PHASE SHIFT**、**SPLITTER**、**DECOY PROJECTOR**に加え、**DUELIST**が周回射撃、**WEBBER**が減速域、**BURROWER**が予告後の潜行再出現を使います。 |
+| CONTAINMENT FAILURE | **MAGNETIZER**など自弾へ干渉する敵や一時構造物に、3点着弾の**SIEGE CANNON**と、撃破した味方を1度だけ蘇生する**REANIMATOR**が加わります。 |
+| RUBBER STEEL CORE | **BULLET ORBITER**や**TETHER GUARDS**が自弾と移動を制約し、**HIVE CALLER**の増援、回避方向を追う**BEAM WEAVER**の掃射と複合します。 |
 
-全新敵のIDは**DASHER、FLANKER、TRIGGER HOUND、PACK RUNNER、HOPPER、ZIGZAG、FRONT SHIELD、PHASE SHIFT、SPLITTER、REPAIR BOT、DECOY PROJECTOR、HUNKER、BURST GUNNER、TRACKING SNIPER、MORTAR、SHOCKWAVER、ARC LAUNCHER、MINE LAYER、MAGNETIZER、ACCELERATOR、SLOW FIELD、PRISM SPLITTER、MOVING MIRROR、BULLET ORBITER、WALL BUILDER、SHUTTER OPERATOR、REINFORCEMENT BEACON、SQUAD COMMANDER、TETHER GUARDS、ECHO STALKER、TRIPLE GUNNER、RICOCHET GUNNER**です。FRONT SHIELDは向きで自弾を反射し、装甲敵のように初弾で壊れません。PHASE SHIFT中の敵は弾を通し、SPLITTERの子敵も全滅判定に含みます。自弾を曲げる・加速する・減速する・分裂させる・周回させる敵がいても、自弾の所有者、壁反射、永久残存、自分への当たり判定は変わりません。敵弾は通常の寿命と総弾数上限に従い、RICOCHET GUNNERの弾も反射は最大2回です。
+追加10種の攻撃と対処は次のとおりです。
+
+| 敵 | 行動と対処 |
+| --- | --- |
+| **CLUSTER BOMBER** | 1.05秒の起爆予告を出して自爆。射撃で倒すか、爆発円から離れます。 |
+| **GUARDIAN** | 近くの味方2体までを5秒間だけ装甲化。護衛対象へ射撃を当てると一度反射するので、先にGUARDIANを狙う手もあります。 |
+| **SENTINEL** | 回転する射線を0.72秒予告して低速弾を撃ちます。狙い続けず、銃口の向きから外れます。 |
+| **DUELIST** | プレイヤーの周囲を回り、0.62秒の予告後に高速2発を撃ちます。射線を横切るより距離を取ると避けやすくなります。 |
+| **WEBBER** | プレイヤー位置を予告し、3.2秒残る減速域を設置。領域は通過・射撃でき、留まらず移動し続けると影響を抑えられます。 |
+| **BURROWER** | 0.95秒の着地点予告後に潜行移動し、潜行中は自弾を通します。出現地点から離れ、姿を現してから撃ちます。 |
+| **SIEGE CANNON** | 1.35秒後に3つの着弾円を同時に爆発させます。円の間の隙間へ移動します。 |
+| **REANIMATOR** | 1.25秒の蘇生チャネル後、ボス以外の撃破済み味方1体をHP1で一度だけ復帰。蘇生中に本体を倒せば止められます。 |
+| **HIVE CALLER** | HPが残り1になると0.9秒予告し、弱い追跡役2体を一度だけ呼びます。増援を処理しつつ、呼び出し前に本体を倒すのも有効です。 |
+| **BEAM WEAVER** | 1.35秒間、追尾しながらビーム予告線を掃き、その後に直線攻撃。予告線が止まった側へ回避します。ビームは鋼壁で止まります。 |
+
+全新敵のIDは**DASHER、FLANKER、TRIGGER HOUND、PACK RUNNER、HOPPER、ZIGZAG、FRONT SHIELD、PHASE SHIFT、SPLITTER、REPAIR BOT、DECOY PROJECTOR、HUNKER、BURST GUNNER、TRACKING SNIPER、MORTAR、SHOCKWAVER、ARC LAUNCHER、MINE LAYER、MAGNETIZER、ACCELERATOR、SLOW FIELD、PRISM SPLITTER、MOVING MIRROR、BULLET ORBITER、WALL BUILDER、SHUTTER OPERATOR、REINFORCEMENT BEACON、SQUAD COMMANDER、TETHER GUARD、ECHO STALKER、TRIPLE GUNNER、RICOCHET GUNNER、CLUSTER BOMBER、BURROWER、SENTINEL、BEAM WEAVER、GUARDIAN、HIVE CALLER、WEBBER、DUELIST、REANIMATOR、SIEGE CANNON**です。FRONT SHIELDは向きで自弾を反射し、装甲敵のように初弾で壊れません。PHASE SHIFT中の敵は弾を通し、SPLITTERの子敵も全滅判定に含みます。自弾を曲げる・加速する・減速する・分裂させる・周回させる敵がいても、自弾の所有者、壁反射、永久残存、自分への当たり判定は変わりません。敵弾は通常の寿命と総弾数上限に従い、RICOCHET GUNNERの弾も反射は最大2回です。
 
 増援要請は既存フロアの総敵数予算内に限られ、子敵や増援を含めて出口の解放を判定します。部屋によっては予告付きの一時壁、シャッター、地雷、可動壁、崩落床が現れるため、敵だけでなく移動経路と安全な立ち位置も確認してください。
 
@@ -163,7 +178,7 @@ Windows版ZIPは`npm run package:win`で`release/`へ生成できます。Playwr
 
 - `src/data.ts` — ゲーム定数、初期フロア、キャラクター、武器、一時能力。
 - `src/world.ts` — 5エリアと50ステージ、シード付きフロア生成、敵配置と到達性検証。
-- `src/enemies/` — 敵32種の識別子と定義、移動AI、自弾に作用する特殊フィールド。
+- `src/enemies/` — 敵46種の識別子と定義、移動AI、自弾に作用する特殊フィールド。
 - `src/engine.ts` — 固定120Hzのゲーム進行、敵AI、弾・装甲・増援・ギミック・ステージ進行。
 - `src/save.ts` — ブラウザー保存、旧セーブの移行、ステージとキャラクターの解禁。
 - `src/main.ts` — 入力、メニュー、設定、Web Audio、Canvas描画との接続。

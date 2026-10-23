@@ -22,7 +22,9 @@ const ENEMY_SHELL: Partial<Record<EnemyType,string>> = {
   mine_layer:'#6c5144', magnetizer:'#62567a', accelerator:'#72533b', slow_field:'#466775', prism_splitter:'#625985',
   moving_mirror:'#456d70', bullet_orbiter:'#695578', wall_builder:'#705a40', shutter_operator:'#704f4a',
   reinforcement_beacon:'#755735', squad_commander:'#704b53', tether_guard:'#704c59', echo_stalker:'#5d5375',
-  triple_gunner:'#744a41', ricochet_gunner:'#45616a',
+  triple_gunner:'#744a41', ricochet_gunner:'#45616a', bomber:'#704b3a', burrower:'#67503b', sentinel:'#6b5b38',
+  beam_weaver:'#6c4858', guardian:'#416862', hive_caller:'#71553c', webber:'#566444', duelist:'#684750',
+  reanimator:'#5e506f', siege_cannon:'#725047',
 };
 export function drawSoldier(ctx: CanvasRenderingContext2D, look: SoldierLook) {
   const { position:p, role, aim, time } = look;
@@ -51,7 +53,7 @@ export function drawSoldier(ctx: CanvasRenderingContext2D, look: SoldierLook) {
   }
   ctx.translate(-Math.cos(aim)*(look.recoil??0)*1.3,bob-Math.sin(aim)*(look.recoil??0)*1.3);
   // Backpack and vest are large readable color masses, not tiny camouflage noise.
-  const packWidth = role==='hunker'||role==='boss'||role==='armored' ? 26 : role==='tracking_sniper'||role==='mortar'||role==='arc_launcher' ? 24 : 22;
+  const packWidth = role==='hunker'||role==='boss'||role==='armored'||role==='siege_cannon' ? 28 : role==='tracking_sniper'||role==='mortar'||role==='arc_launcher' ? 24 : 22;
   shape(ctx,-packWidth/2,-3,packWidth,19,role==='hunker'?3:5,'#18252b','#34454d');
   // Large role-coded pack modules create a readable outline at normal gameplay zoom.
   if(!player){
@@ -63,6 +65,16 @@ export function drawSoldier(ctx: CanvasRenderingContext2D, look: SoldierLook) {
     }else if(['wall_builder','shutter_operator','reinforcement_beacon','squad_commander','tether_guard','echo_stalker'].includes(role)){
       shape(ctx,-14,-2,6,19,2,'#26333d',accent);shape(ctx,8,-2,6,19,2,'#26333d',accent);
     }
+    if(role==='bomber'){shape(ctx,-13,-5,26,18,4,'#50463a','#ffd083');shape(ctx,-10,-2,20,5,2,'#e9a347');for(const x of[-6,0,6])shape(ctx,x-1,5,2,5,1,'#f9d68f');}
+    if(role==='burrower'){ctx.fillStyle='#343a38';ctx.beginPath();ctx.moveTo(-12,10);ctx.lineTo(0,24);ctx.lineTo(12,10);ctx.lineTo(7,-3);ctx.lineTo(-7,-3);ctx.closePath();ctx.fill();shape(ctx,-3,10,6,10,2,'#c18b5e',accent);}
+    if(role==='sentinel'){shape(ctx,-12,-7,24,20,4,'#47443a',accent);shape(ctx,-4,-23,8,18,2,'#343e41','#a8c4c0');ellipse(ctx,0,-24,4,4,accent);}
+    if(role==='beam_weaver'){shape(ctx,-15,-7,8,22,3,'#463941',accent);shape(ctx,7,-7,8,22,3,'#463941',accent);ellipse(ctx,-11,-7,4,4,'#fff0ed');ellipse(ctx,11,-7,4,4,'#fff0ed');}
+    if(role==='guardian'){shape(ctx,-17,-3,9,18,3,'#3e5a58',accent);shape(ctx,8,-3,9,18,3,'#3e5a58',accent);shape(ctx,-6,-25,12,6,3,'#344848',accent);}
+    if(role==='hive_caller'){for(const x of[-9,0,9]){ellipse(ctx,x,-5,5,6,'#594535');ellipse(ctx,x,-6,2,2,accent);}}
+    if(role==='webber'){shape(ctx,-14,-9,7,22,4,'#46533c',accent);shape(ctx,7,-9,7,22,4,'#46533c',accent);ctx.strokeStyle='#d1e2a0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-11,-4);ctx.lineTo(11,8);ctx.moveTo(11,-4);ctx.lineTo(-11,8);ctx.stroke();}
+    if(role==='duelist'){shape(ctx,-15,-4,5,15,2,'#493842',accent);shape(ctx,10,-4,5,15,2,'#493842',accent);shape(ctx,-4,-26,8,4,2,accent);}
+    if(role==='reanimator'){shape(ctx,-15,-9,30,11,4,'#403748',accent);shape(ctx,-11,-5,22,16,6,'#4b3f54');ellipse(ctx,0,-3,3,3,'#f1d7ff');}
+    if(role==='siege_cannon'){shape(ctx,-15,-8,30,19,4,'#4c3a38',accent);shape(ctx,-4,-26,8,22,2,'#5c4a43','#ddc09a');ellipse(ctx,0,-27,5,3,'#f1c991');}
   }
   if(player&&look.character==='fire'){shape(ctx,-15,-2,7,17,3,'#553b35',accent);shape(ctx,-16,2,3,11,1,'#a96149');}
   if(player&&look.character==='ice'){shape(ctx,-15,-5,8,18,3,'#2e505c',accent);shape(ctx,-17,1,3,9,1,'#9ed7ef');}
@@ -146,13 +158,24 @@ export function drawSoldier(ctx: CanvasRenderingContext2D, look: SoldierLook) {
   if(role==='echo_stalker'){ctx.globalAlpha=.5;shape(ctx,-13,-12,26,25,7,accent);ctx.globalAlpha=1;}
   if(role==='triple_gunner'){shape(ctx,4,-7,27,9,3,'#493a3a',accent);for(const y of[-4,0,4])shape(ctx,25,y-1,8,2,1,accent);}
   if(role==='ricochet_gunner'){shape(ctx,4,-7,26,9,3,'#334a52',accent);shape(ctx,26,-4,10,3,1,'#d9fbff');}
+  if(role==='bomber'){shape(ctx,-13,-13,26,5,2,'#634538','#ffc36d');ellipse(ctx,0,-31,5,4,'#e59555');}
+  if(role==='burrower'){ctx.fillStyle='#393733';ctx.beginPath();ctx.moveTo(-12,-16);ctx.lineTo(-5,-28);ctx.lineTo(0,-32);ctx.lineTo(7,-27);ctx.lineTo(12,-16);ctx.lineTo(0,-11);ctx.closePath();ctx.fill();shape(ctx,-6,-31,12,3,1,accent);}
+  if(role==='sentinel'){ctx.strokeStyle=accent;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,-17,15,Math.PI,Math.PI*2);ctx.stroke();}
+  if(role==='guardian'){shape(ctx,-18,-12,8,13,3,'#466762',accent);shape(ctx,10,-12,8,13,3,'#466762',accent);}
+  if(role==='reanimator'){shape(ctx,-11,-22,22,8,4,'#473b54',accent);ellipse(ctx,0,-17,3,2,'#eedaff');}
   // Aim rotation is confined to arms and weapon, preserving a readable upright head.
   ctx.save();ctx.rotate(aim);
   const kick=(look.recoil??0)*2;
   shape(ctx,0-kick,-6,15,6,3,olive);shape(ctx,3-kick,4,13,6,3,olive);
   shape(ctx,11-kick,-4,6,6,2,'#171f24');shape(ctx,11-kick,3,6,6,2,'#171f24');
   const weapon=look.weapon??(heavy?'heavy':'standard');
-  if(weapon==='heavy'){
+  if(role==='siege_cannon'){
+    shape(ctx,1-kick,-8,22,16,4,'#473c39','#d8b08a');shape(ctx,13-kick,-5,22,10,3,'#746051');shape(ctx,31-kick,-4,9,8,2,'#24282b');ellipse(ctx,37-kick,0,4,4,'#ffc974');
+  }else if(role==='beam_weaver'){
+    shape(ctx,2-kick,-6,20,12,4,'#443744','#d38da1');shape(ctx,15-kick,-4,20,8,3,'#634356');shape(ctx,31-kick,-6,5,4,1,'#fff0f3');shape(ctx,31-kick,2,5,4,1,'#fff0f3');
+  }else if(role==='duelist'){
+    shape(ctx,2-kick,-4,17,8,3,'#43343d','#d5a0aa');shape(ctx,16-kick,-3,17,6,2,'#8a646b');shape(ctx,29-kick,-2,6,4,1,'#f3d2d4');
+  }else if(weapon==='heavy'){
     shape(ctx,5-kick,-5,19,11,3,'#283740','#a4b3b6');shape(ctx,18-kick,-6,8,13,2,'#61737b');shape(ctx,25-kick,-3,5,7,1,'#17262e');shape(ctx,8-kick,-4,8,2,1,accent);
   }else if(weapon==='triple'){
     shape(ctx,3-kick,-5,20,11,3,'#2a3a41','#98aab0');for(const y of[-4,0,4])shape(ctx,19-kick,y-1,10,2,1,'#b9c7cb');shape(ctx,8-kick,-3,6,5,1,accent);

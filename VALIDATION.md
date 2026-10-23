@@ -1,4 +1,13 @@
-# 検証記録 / 2026-10-13
+# 検証記録 / 最新: 2026-10-22
+
+## 特殊敵10種追加と全体バランス調整 / 2026-10-22
+
+- 公式の[Returnal敵設計記事](https://blog.playstation.com/2021/04/14/creating-returnals-otherworldly-enemies-vfx-driven-tentacle-tech-and-deep-sea-inspirations/)で、敵をゲームプレイ上の役割から設計し、単体だけでなく敵同士の組み合わせを検証する手法を確認。[GDCのテレグラフ資料](https://media.gdcvault.com/gdc2016/Presentations/Rouse_Richard_RulesOfTheGame.pdf)にある攻撃前の十分な予告と回避機会の原則も参考にし、既存RSUの反射弾・敵数予算に合わせて独自の能力へ再構成した。
+- CLUSTER BOMBER、GUARDIAN、SENTINEL、DUELIST、WEBBER、BURROWER、SIEGE CANNON、REANIMATOR、HIVE CALLER、BEAM WEAVERをステージ13〜41へ段階配置。爆発・潜行・掃射・短期防御・減速域・蘇生など、現行36種と役割の異なる10種を追加し、全敵数は46種になった。
+- フロア総数7,636体、各ステージの総敵数、初期12体、増援530波、最大ライブ12体、TRIPLE入口機会473/473を維持。新特殊敵はフロアごと最大3体、入口から見えるTRIPLE向けクラスターは最大1体に制限。召喚・蘇生もライブ12体上限内に収め、装甲を再付与するGUARDIANの効果は5秒、WEBBERの減速域は3.2秒、爆発・ビーム・砲撃には個別の回避予告を付けた。
+- 新敵ごとのテストで予告と攻撃、潜行中の弾通過、回避、短時間装甲、弱体化域、召喚数、蘇生上限、ライブ上限、着弾円の隙間を確認。全500フロアで新敵の段階解禁・出現・特殊敵密度を確認し、生成エラー0、フォールバック0。
+- `npm test`: 62/62成功。`npm run build`: TypeScript検査・本番ビルド成功。`npm run verify:content -- --profile`: 敵総数7,636、初期最大12、ライブ最大12、エラー0。`npm run test:browser`、`npm run test:mobile`、`npm run test:debug`成功。STAGE 50高負荷画面は37サンプルでFPS中央値60・p10 56、描画中央値1.7ms・p95 6.0ms、弾ピーク29/180（開発PC Edge headless）。
+- `artifacts/new-special-enemies.png`で10種を同時配置してシルエットと色を目視確認。低性能PC・実機スマートフォンでの長時間負荷と人間による難易度・武器選択の評価は今後のプレイテスト項目。
 
 ## 新規32敵タイプ拡張 / 2026-10-18
 

@@ -103,6 +103,39 @@ export function movementIntent(enemy:Enemy,context:EnemyMovementContext):EnemyMo
   const state=enemy.behavior??(enemy.behavior={});
   const toward=unit(context.player.x-enemy.x,context.player.y-enemy.y);
   switch(enemy.type){
+    case 'bomber': return {velocity:state.mode==='windup'?{x:0,y:0}:{x:toward.x*38,y:toward.y*38}};
+    case 'burrower': {
+      if(state.mode==='burrow'){
+        state.modeTime=(state.modeTime??0)-context.dt;
+        if(state.modeTime<=0&&state.landing){enemy.x=state.landing.x;enemy.y=state.landing.y;state.landing=undefined;state.mode='recover';state.modeTime=.55;state.alerted=false;}
+        return {velocity:{x:0,y:0}};
+      }
+      if(state.mode==='recover'){state.modeTime=(state.modeTime??0)-context.dt;if(state.modeTime<=0)state.mode='approach';return {velocity:{x:0,y:0}};}
+      return {velocity:{x:toward.x*32,y:toward.y*32}};
+    }
+    case 'guardian': {
+      const ally=context.enemies.filter(other=>other!==enemy&&other.hp>0&&!other.armor&&dist(enemy,other)<230).sort((a,b)=>dist(enemy,a)-dist(enemy,b))[0];
+      if(ally&&dist(enemy,ally)>105){const d=unit(ally.x-enemy.x,ally.y-enemy.y);return {velocity:{x:d.x*24,y:d.y*24}};}
+      return {velocity:{x:toward.x*16,y:toward.y*16}};
+    }
+    case 'duelist': {
+      state.modeTime=(state.modeTime??0)-context.dt;if(state.flankSide===undefined)state.flankSide=1;
+      if(state.modeTime<=0){state.flankSide=state.flankSide===1?-1:1;state.modeTime=3.2;}
+      const d=dist(enemy,context.player),radial=d>255?1:d<170?-1:0,side={x:-toward.y,y:toward.x},speed=48+context.area*1.5;
+      return {velocity:{x:toward.x*speed*radial+side.x*speed*.82*state.flankSide,y:toward.y*speed*radial+side.y*speed*.82*state.flankSide}};
+    }
+    case 'webber': {
+      const d=dist(enemy,context.player),radial=d>285?22:d<175?-30:0,side={x:-toward.y,y:toward.x},orbit=Math.sin(context.elapsed*.55+enemy.x*.01)<0?-1:1;
+      return {velocity:{x:toward.x*radial+side.x*22*orbit,y:toward.y*radial+side.y*22*orbit}};
+    }
+    case 'sentinel': case 'beam_weaver': case 'siege_cannon': return {velocity:{x:0,y:0}};
+    case 'hive_caller': {const d=dist(enemy,context.player),radial=d>275?12:d<185?-24:0;return {velocity:{x:toward.x*radial,y:toward.y*radial}};}
+    case 'reanimator': {
+      if(state.mode==='channel')return {velocity:{x:0,y:0}};
+      const corpse=context.enemies.filter(other=>other!==enemy&&other.hp<=0&&other.type!=='boss'&&!other.behavior?.reanimated).sort((a,b)=>dist(enemy,a)-dist(enemy,b))[0];
+      if(corpse&&dist(enemy,corpse)>72){const d=unit(corpse.x-enemy.x,corpse.y-enemy.y);return {velocity:{x:d.x*15,y:d.y*15}};}
+      return {velocity:{x:toward.x*12,y:toward.y*12}};
+    }
     case 'hunker': return {velocity:{x:0,y:0}};
     case 'repair_bot': {
       const target=context.enemies.filter(other=>other!==enemy&&other.hp>0&&other.type==='armored'&&!other.armor).sort((a,b)=>dist(enemy,a)-dist(enemy,b))[0];

@@ -1,6 +1,6 @@
 import type { EnemyType } from './types';
 
-export type EnemyCategory = 'legacy' | 'movement' | 'defense' | 'shooter' | 'bullet' | 'environment';
+export type EnemyCategory = 'legacy' | 'movement' | 'defense' | 'shooter' | 'bullet' | 'environment' | 'special';
 export type EnemyDefinition = {
   id: EnemyType;
   name: string;
@@ -51,6 +51,16 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
   echo_stalker: {id:'echo_stalker',name:'ECHO STALKER',category:'environment',unlockStage:42,hp:2,radius:16,speed:31,color:'#bda9d9',maxPerFloor:2},
   triple_gunner: {id:'triple_gunner',name:'TRIPLE GUNNER',category:'shooter',unlockStage:9,hp:1,radius:15,speed:0,color:'#e7826e',maxPerFloor:2},
   ricochet_gunner: {id:'ricochet_gunner',name:'RICOCHET GUNNER',category:'shooter',unlockStage:28,hp:2,radius:16,speed:0,color:'#96c6d8',maxPerFloor:2},
+  bomber: {id:'bomber',name:'CLUSTER BOMBER',category:'special',unlockStage:13,hp:1,radius:14,speed:34,color:'#f19a68',maxPerFloor:1},
+  guardian: {id:'guardian',name:'GUARDIAN',category:'special',unlockStage:16,hp:3,radius:17,speed:16,color:'#7fc9bd',maxPerFloor:1},
+  sentinel: {id:'sentinel',name:'SENTINEL',category:'special',unlockStage:18,hp:2,radius:17,speed:0,color:'#e5bd72',maxPerFloor:1},
+  duelist: {id:'duelist',name:'DUELIST',category:'special',unlockStage:21,hp:2,radius:15,speed:46,color:'#d69aa6',maxPerFloor:1},
+  webber: {id:'webber',name:'WEBBER',category:'special',unlockStage:24,hp:2,radius:16,speed:20,color:'#a7c982',maxPerFloor:1},
+  burrower: {id:'burrower',name:'BURROWER',category:'special',unlockStage:27,hp:2,radius:15,speed:32,color:'#cc9d70',maxPerFloor:1},
+  siege_cannon: {id:'siege_cannon',name:'SIEGE CANNON',category:'special',unlockStage:30,hp:3,radius:18,speed:0,color:'#d38d79',maxPerFloor:1},
+  reanimator: {id:'reanimator',name:'REANIMATOR',category:'special',unlockStage:33,hp:2,radius:17,speed:12,color:'#b69bd2',maxPerFloor:1},
+  hive_caller: {id:'hive_caller',name:'HIVE CALLER',category:'special',unlockStage:37,hp:3,radius:17,speed:14,color:'#e2a56e',maxPerFloor:1},
+  beam_weaver: {id:'beam_weaver',name:'BEAM WEAVER',category:'special',unlockStage:41,hp:2,radius:16,speed:0,color:'#e48a9f',maxPerFloor:1},
 };
 
 export function enemyDefinition(type: EnemyType) { return ENEMY_DEFINITIONS[type]; }

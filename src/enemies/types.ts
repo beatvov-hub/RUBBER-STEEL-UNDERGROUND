@@ -7,6 +7,7 @@ export const ENEMY_TYPES = [
   'magnetizer', 'accelerator', 'slow_field', 'prism_splitter', 'moving_mirror', 'bullet_orbiter',
   'wall_builder', 'shutter_operator', 'reinforcement_beacon', 'squad_commander', 'tether_guard', 'echo_stalker',
   'triple_gunner', 'ricochet_gunner',
+  'bomber', 'burrower', 'sentinel', 'beam_weaver', 'guardian', 'hive_caller', 'webber', 'duelist', 'reanimator', 'siege_cannon',
 ] as const;
 
 export type EnemyType = typeof ENEMY_TYPES[number];

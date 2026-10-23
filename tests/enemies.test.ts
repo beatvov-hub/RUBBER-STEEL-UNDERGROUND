@@ -4,7 +4,7 @@ import { Game, type Enemy, type Bullet } from '../src/engine';
 import { CONFIG } from '../src/data';
 import { ENEMY_TYPES, NEW_ENEMY_TYPES } from '../src/enemies/types';
 import { enemyDefinition } from '../src/enemies/definitions';
-import { floorFor } from '../src/world';
+import { capSpecialEnemies, floorFor } from '../src/world';
 
 function isolated(type: typeof ENEMY_TYPES[number], enemyX=700, enemyY=300) {
   const game=new Game();game.start(45);game.player={x:300,y:300,hp:1};
@@ -12,10 +12,77 @@ function isolated(type: typeof ENEMY_TYPES[number], enemyX=700, enemyY=300) {
   game.enemies=[enemy];game.reinforcementQueue=[];return {game,enemy};
 }
 
-test('all 32 new enemy IDs are present in eligible floors across the deterministic 500-floor campaign',()=>{
-  assert.equal(NEW_ENEMY_TYPES.length,32);const found=new Set<string>();
+test('all 42 new enemy IDs are present in eligible floors across the deterministic 500-floor campaign',()=>{
+  assert.equal(NEW_ENEMY_TYPES.length,42);const found=new Set<string>();
   for(let stage=1;stage<=50;stage++)for(let floor=1;floor<=10;floor++){const plan=floorFor(stage,floor);for(const e of plan.enemies)found.add(e.type);for(const wave of plan.reinforcements??[])for(const type of wave.types)found.add(type);}
   for(const type of NEW_ENEMY_TYPES)assert.ok(found.has(type),`${type} never spawns`);
+});
+
+test('ten new special archetypes unlock gradually and stay capped at three per floor',()=>{
+  const added=ENEMY_TYPES.slice(36);assert.equal(added.length,10);assert.ok(added.every(type=>enemyDefinition(type).category==='special'));
+  for(const type of added)assert.ok(ENEMY_TYPES.some(candidate=>candidate===type));
+  const testSet=added.map((type,index)=>({type,x:100+index*20,y:100}));capSpecialEnemies(testSet);
+  assert.ok(testSet.filter(enemy=>enemyDefinition(enemy.type).category==='special').length<=3);
+  const found=new Set<string>();for(let stage=1;stage<=50;stage++)for(let floor=1;floor<=10;floor++){
+    const plan=floorFor(stage,floor),spawns=[...plan.enemies,...(plan.reinforcements??[]).flatMap(wave=>wave.types.map(type=>({type,x:0,y:0})))];
+    for(const enemy of spawns){if(enemyDefinition(enemy.type).category==='special')assert.ok(enemyDefinition(enemy.type).unlockStage<=stage);found.add(enemy.type);}
+    assert.ok(spawns.filter(enemy=>enemyDefinition(enemy.type).category==='special').length<=3,`too many pressure enemies at ${stage}:${floor}`);
+  }
+  for(const type of added)assert.ok(found.has(type),`${type} never appears`);
+  assert.ok(floorFor(12,5).enemies.every(enemy=>!added.includes(enemy.type as typeof added[number])),'new types must not leak before unlock');
+});
+
+test('CLUSTER BOMBER warns, then can be safely outrun',()=>{
+  const {game,enemy}=isolated('bomber',410,300);game.player={x:300,y:300,hp:1};enemy.timer=0;game.update(.02);
+  assert.ok(game.attackWarnings.some(warning=>warning.kind==='BOMBER'));game.player={x:650,y:500,hp:1};game.update(1.1);
+  assert.equal(enemy.hp,0);assert.equal(game.state,'playing');
+});
+
+test('BURROWER marks its emergence, ignores fire underground, and relocates',()=>{
+  const {game,enemy}=isolated('burrower',620,300);game.player={x:300,y:300,hp:1};enemy.timer=0;game.update(.02);
+  assert.equal(enemy.behavior?.mode,'burrow');const landing={...enemy.behavior!.landing!};assert.ok(game.attackWarnings.some(warning=>warning.kind==='BURROW'));
+  const bullet:Bullet={x:enemy.x-38,y:enemy.y,vx:190,vy:0,radius:4,damage:1,active:true,owner:'player',reflections:0,age:1,armed:true,heavy:false,weapon:'standard',trail:[]};game.bullets=[bullet];game.update(.15);
+  assert.equal(enemy.hp,2);game.update(.9);assert.equal(enemy.behavior?.mode,'recover');assert.ok(Math.hypot(enemy.x-landing.x,enemy.y-landing.y)<1);
+});
+
+test('SENTINEL uses a rotating line warning before firing its predictable round',()=>{
+  const {game,enemy}=isolated('sentinel',700,300);game.debugInvincible=true;enemy.timer=0;game.update(.02);
+  assert.ok(game.attackWarnings.some(warning=>warning.kind==='SENTINEL'));game.update(.8);
+  const rounds=game.bullets.filter(bullet=>bullet.owner==='enemy');assert.equal(rounds.length,1);assert.equal(rounds[0].source,'sentinel');
+});
+
+test('BEAM WEAVER shows a tracking sweep and resolves a single dodgeable ray',()=>{
+  const {game,enemy}=isolated('beam_weaver',700,300);game.player={x:300,y:300,hp:1};enemy.timer=0;game.update(.02);
+  const warning=game.attackWarnings.find(item=>item.kind==='BEAM');assert.ok(warning);const before=warning.angle;game.update(.55);assert.notEqual(warning.angle,before);
+  assert.equal(game.bullets.filter(bullet=>bullet.owner==='enemy').length,0);assert.ok(warning.life>0);
+});
+
+test('GUARDIAN grants a short-lived armor pulse and WEBBER creates a readable slow zone',()=>{
+  const guardian=isolated('guardian',500,300);guardian.enemy.timer=0;const ally:Enemy={x:550,y:300,type:'basic',hp:1,armor:false,radius:15,timer:5,hit:0,slow:0};guardian.game.enemies.push(ally);guardian.game.update(.02);
+  assert.equal(ally.armor,true);assert.ok((ally.behavior?.guardTime??0)>4);guardian.game.update(5.1);assert.equal(ally.armor,false);
+  const webber=isolated('webber',520,300);webber.game.player={x:300,y:300,hp:1};webber.enemy.timer=0;webber.game.update(.02);assert.ok(webber.game.attackWarnings.some(warning=>warning.kind==='WEB'));webber.game.update(.95);
+  assert.ok(webber.game.enemyFields.some(field=>field.kind==='web'));const start=webber.game.player.x;webber.game.update(.1,{x:1,y:0});const slowedDelta=webber.game.player.x-start;
+  assert.ok(slowedDelta>0&&slowedDelta<15,`web movement should be reduced, got ${slowedDelta}`);
+});
+
+test('HIVE CALLER summons only two weak reinforcements once and within the live cap',()=>{
+  const {game,enemy}=isolated('hive_caller',700,300);game.debugInvincible=true;enemy.hp=1;game.update(.02);assert.equal(enemy.behavior?.used,true);
+  assert.equal(game.attackWarnings.filter(warning=>warning.kind==='HIVE').length,2);game.update(.95);
+  assert.equal(game.activeRemaining,3);assert.ok(game.activeRemaining<=12);assert.equal(game.enemies.filter(candidate=>candidate.type==='dasher').length,2);
+});
+
+test('REANIMATOR channels before reviving one non-boss ally only once',()=>{
+  const {game,enemy}=isolated('reanimator',500,300);game.player={x:200,y:300,hp:1};const corpse:Enemy={x:525,y:300,type:'basic',hp:0,armor:false,radius:15,timer:1,hit:0,behavior:{}};game.enemies.push(corpse);enemy.timer=0;
+  game.update(.02);assert.equal(enemy.behavior?.mode,'channel');assert.ok(game.attackWarnings.some(warning=>warning.kind==='REVIVE'));game.update(1.3);
+  assert.equal(corpse.hp,1);assert.equal(corpse.behavior?.reanimated,true);assert.equal(enemy.behavior?.used,true);
+  const capped=isolated('reanimator',700,300),waiting:Enemy={x:720,y:300,type:'basic',hp:0,armor:false,radius:15,timer:1,hit:0,behavior:{}};capped.game.debugInvincible=true;capped.enemy.timer=0;capped.game.enemies=[capped.enemy,...Array.from({length:11},(_,index)=>({x:500+index*24,y:500,type:'basic' as const,hp:1,armor:false,radius:15,timer:5,hit:0,behavior:{}})),waiting];
+  capped.game.update(.02);assert.equal(capped.game.activeRemaining,12);assert.equal(capped.game.attackWarnings.some(warning=>warning.kind==='REVIVE'),false,'revival must not break the live-enemy cap');
+});
+
+test('DUELIST fires a warned pair while SIEGE CANNON marks separated landing zones',()=>{
+  const duelist=isolated('duelist',700,300);duelist.game.debugInvincible=true;duelist.enemy.timer=0;duelist.game.update(.02);assert.ok(duelist.game.attackWarnings.some(warning=>warning.kind==='DUELIST'));duelist.game.update(.7);assert.equal(duelist.game.bullets.filter(bullet=>bullet.owner==='enemy').length,2);
+  const siege=isolated('siege_cannon',700,300);siege.enemy.timer=0;siege.game.update(.02);const warnings=siege.game.attackWarnings.filter(warning=>warning.kind==='SIEGE');assert.equal(warnings.length,3);siege.game.player={x:300,y:300,hp:1};siege.game.update(1.4);assert.equal(siege.game.state,'playing');
+  siege.enemy.timer=0;siege.game.update(.02);const target=siege.game.attackWarnings.find(warning=>warning.kind==='SIEGE')!;siege.game.player={x:target.x,y:target.y,hp:1};siege.game.update(1.4);assert.equal(siege.game.state,'dead');
 });
 
 test('DASHER telegraphs a locked heading, dashes, then recovers',()=>{

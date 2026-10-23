@@ -1,6 +1,6 @@
 import type { Vec } from '../data';
 
-export type EnemyMode = 'approach' | 'windup' | 'dash' | 'recover' | 'hop' | 'phase' | 'repair' | 'burst' | 'aim' | 'fire' | 'cooldown';
+export type EnemyMode = 'approach' | 'windup' | 'dash' | 'recover' | 'hop' | 'phase' | 'burrow' | 'repair' | 'channel' | 'burst' | 'aim' | 'fire' | 'cooldown';
 
 /** Explicit per-instance behavior data; reset whenever a floor is loaded. */
 export type EnemyBehaviorState = {
@@ -21,5 +21,7 @@ export type EnemyBehaviorState = {
   alerted?: boolean;
   hopOverSmallWall?: boolean;
   mirror?:Vec;
+  guardTime?:number;
+  reanimated?:boolean;
 };
 

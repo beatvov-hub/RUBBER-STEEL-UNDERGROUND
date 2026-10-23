@@ -9,7 +9,7 @@ export type Enemy = Vec & { type: EnemyType; hp: number; armor: boolean; radius:
 export type Effect = Vec & { age: number; color: string; text?: string };
 export type State = 'title' | 'playing' | 'paused' | 'dead' | 'choice' | 'stage-clear' | 'won';
 export type HazardState = { source: Hazard; rect: Rect; warning: boolean; active: boolean; progress: number };
-export type EnemyField={rect:Rect;life:number;owner:number;kind?:'wall'|'shutter'|'mine';arm?:number};
+export type EnemyField={rect:Rect;life:number;owner:number;kind?:'wall'|'shutter'|'mine'|'web';arm?:number};
 export type AttackWarning={x:number;y:number;radius:number;life:number;kind:string;owner:number;angle?:number};
 export type EnemyDecoy={x:number;y:number;life:number;owner:number;side:number};
 const distance = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -115,9 +115,9 @@ export class Game {
   moveCircle(p: Vec, dx: number, dy: number, radius: number, ignoreWalls=false) {
     const b = this.layout.bounds;
     const oldX = p.x; p.x = Math.max(b.x + radius, Math.min(b.x + b.w - radius, p.x + dx));
-    if ([...(ignoreWalls?[]:this.layout.walls),...this.hazardBlockers,...this.enemyFields.filter(field=>field.kind!=='mine').map(field=>field.rect)].some(w => circleRect(p, radius, w))) p.x = oldX;
+    if ([...(ignoreWalls?[]:this.layout.walls),...this.hazardBlockers,...this.enemyFields.filter(field=>field.kind!=='mine'&&field.kind!=='web').map(field=>field.rect)].some(w => circleRect(p, radius, w))) p.x = oldX;
     const oldY = p.y; p.y = Math.max(b.y + radius, Math.min(b.y + b.h - radius, p.y + dy));
-    if ([...(ignoreWalls?[]:this.layout.walls),...this.hazardBlockers,...this.enemyFields.filter(field=>field.kind!=='mine').map(field=>field.rect)].some(w => circleRect(p, radius, w))) p.y = oldY;
+    if ([...(ignoreWalls?[]:this.layout.walls),...this.hazardBlockers,...this.enemyFields.filter(field=>field.kind!=='mine'&&field.kind!=='web').map(field=>field.rect)].some(w => circleRect(p, radius, w))) p.y = oldY;
   }
   reflect(b: Bullet, axis: 'x' | 'y') {
     if (axis === 'x') b.vx *= -1; else b.vy *= -1;
@@ -131,16 +131,58 @@ export class Game {
     for(const h of this.hazards)if(h.active&&circleRect(this.player,CONFIG.playerRadius,h.rect)){this.die(h.source.type==='collapse'?'FLOOR COLLAPSE / 床の崩落':'MOVING STEEL / 可動壁への接触');break;}
     if(this.state!=='playing')return;
     const norm = Math.max(1, Math.hypot(movement.x, movement.y));
-    const speed = CHARACTERS[this.character].speed * (1 + .15 * this.stacks('move')) * (1 + .1 * this.stacks('stride')) * (firing?1+.12*this.stacks('strafe'):1) * (!this.remaining?1+.2*this.stacks('exit'):1);
+    const webbed=this.enemyFields.some(field=>field.kind==='web'&&(field.arm??0)===0&&circleRect(this.player,1,field.rect));
+    const speed = CHARACTERS[this.character].speed * (webbed?.62:1) * (1 + .15 * this.stacks('move')) * (1 + .1 * this.stacks('stride')) * (firing?1+.12*this.stacks('strafe'):1) * (!this.remaining?1+.2*this.stacks('exit'):1);
     this.moveCircle(this.player, movement.x / norm * speed * dt, movement.y / norm * speed * dt, CONFIG.playerRadius);
     this.playerTrail.push({x:this.player.x,y:this.player.y,t:this.floorTime});while(this.playerTrail.length&&this.floorTime-this.playerTrail[0].t>4)this.playerTrail.shift();
     if (firing && target) this.shoot(target);
     for (let enemyIndex=0;enemyIndex<this.enemies.length;enemyIndex++) {
       const e=this.enemies[enemyIndex];
       if (e.hp <= 0) continue; e.timer -= dt; e.hit = Math.max(0, e.hit - dt); e.slow=Math.max(0,(e.slow??0)-dt);
+      if(e.behavior?.guardTime!==undefined){e.behavior.guardTime-=dt;if(e.behavior.guardTime<=0){e.behavior.guardTime=undefined;e.armor=false;}}
       const d = distance(e, this.player), a = Math.atan2(this.player.y - e.y, this.player.x - e.x), area=STAGES[this.stage-1].area;
+      if(e.type==='bomber'&&e.timer<=0&&d<155&&e.behavior!.mode!=='windup'&&!e.behavior!.used){e.behavior!.mode='windup';e.behavior!.used=true;e.timer=10;this.attackWarnings.push({x:e.x,y:e.y,radius:96,life:1.05,kind:'BOMBER',owner:enemyIndex});this.effects.push({x:e.x,y:e.y,age:1,color:'#ffb46d',text:'ARMED'});}
+      if(e.type==='burrower'&&e.timer<=0&&d>120&&d<360&&e.behavior!.mode!=='burrow'&&e.behavior!.mode!=='recover'){
+        const side=(enemyIndex%2?1:-1),angle=a+side*.92,landing={x:this.player.x+Math.cos(angle)*145,y:this.player.y+Math.sin(angle)*145},bounds=this.layout.bounds;
+        if(landing.x>bounds.x+60&&landing.x<bounds.x+bounds.w-60&&landing.y>bounds.y+60&&landing.y<bounds.y+bounds.h-60&&!this.layout.walls.some(wall=>circleRect(landing,30,wall))&&!this.enemies.some(other=>other!==e&&other.hp>0&&distance(other,landing)<other.radius+e.radius+14)){e.behavior!.mode='burrow';e.behavior!.modeTime=.95;e.behavior!.landing=landing;e.behavior!.alerted=true;e.timer=7.6;this.attackWarnings.push({x:landing.x,y:landing.y,radius:46,life:.95,kind:'BURROW',owner:enemyIndex});}
+      }
       const walls=[...this.layout.walls,...this.hazardBlockers];
       const intent=movementIntent(e,{player:this.player,enemies:this.enemies,elapsed:this.elapsed,dt,area,bossSpeed:this.bossSpec.speed,walls,isFree:(p,r)=>{const b=this.layout.bounds;return p.x>=b.x+r&&p.y>=b.y+r&&p.x<=b.x+b.w-r&&p.y<=b.y+b.h-r&&!walls.some(w=>circleRect(p,r,w));},playerHistory:seconds=>this.playerTrail.find(p=>this.floorTime-p.t>=seconds)});
+      if(e.type==='sentinel'){
+        e.behavior!.heading??={x:Math.cos(a),y:Math.sin(a)};
+        const heading=e.behavior!.heading,angle=Math.atan2(heading.y,heading.x)+dt*.48;e.behavior!.heading={x:Math.cos(angle),y:Math.sin(angle)};
+        if(e.behavior!.mode==='aim'){const warning=this.attackWarnings.find(item=>item.kind==='SENTINEL'&&item.owner===enemyIndex);if(warning&&warning.life>.12)warning.angle=angle;else e.behavior!.mode='cooldown';}
+        else if(e.timer<=0){e.behavior!.mode='aim';e.timer=3.9;this.attackWarnings.push({x:e.x,y:e.y,radius:0,life:.72,kind:'SENTINEL',owner:enemyIndex,angle});}
+      }
+      if(e.type==='beam_weaver'){
+        if(e.behavior!.mode==='aim'){
+          const warning=this.attackWarnings.find(item=>item.kind==='BEAM'&&item.owner===enemyIndex);
+          if(warning&&warning.life>.35){const current=warning.angle??a,delta=Math.atan2(Math.sin(a-current),Math.cos(a-current)),step=Math.max(-.52*dt,Math.min(.52*dt,delta));warning.angle=current+step;}
+          else e.behavior!.mode='cooldown';
+        }else if(e.timer<=0){e.behavior!.mode='aim';e.timer=6;this.attackWarnings.push({x:e.x,y:e.y,radius:12,life:1.35,kind:'BEAM',owner:enemyIndex,angle:a-.62});}
+      }
+      if(e.type==='duelist'&&e.behavior!.mode==='aim'){
+        const warning=this.attackWarnings.find(item=>item.kind==='DUELIST'&&item.owner===enemyIndex);if(warning&&warning.life>.16){warning.x=e.x;warning.y=e.y;warning.angle=a;}else e.behavior!.mode='cooldown';
+      }
+      if(e.type==='duelist'&&e.timer<=0&&e.behavior!.mode!=='aim'){e.behavior!.mode='aim';e.timer=4.4;this.attackWarnings.push({x:e.x,y:e.y,radius:0,life:.62,kind:'DUELIST',owner:enemyIndex,angle:a});}
+      if(e.type==='guardian'&&e.timer<=0){
+        const targets=this.enemies.filter(other=>other!==e&&other.hp>0&&!other.armor&&other.type!=='boss'&&distance(e,other)<155).sort((x,y)=>distance(e,x)-distance(e,y)).slice(0,2);
+        for(const target of targets){target.armor=true;target.behavior??={};target.behavior.guardTime=5;this.effects.push({x:target.x,y:target.y,age:.7,color:'#8de0d3',text:'GUARDED'});}
+        e.timer=8.5;
+      }
+      if(e.type==='webber'&&e.timer<=0&&d>105){
+        const occupied=this.enemyFields.some(field=>field.kind==='web'&&field.owner===enemyIndex);if(!occupied){this.attackWarnings.push({x:this.player.x,y:this.player.y,radius:48,life:.9,kind:'WEB',owner:enemyIndex});e.timer=7.2;}
+      }
+      if(e.type==='hive_caller'&&e.hp<=1&&!e.behavior!.used&&this.activeRemaining<=10){
+        e.behavior!.used=true;this.attackWarnings.push({x:e.x-25,y:e.y+18,radius:25,life:.9,kind:'HIVE',owner:enemyIndex},{x:e.x+25,y:e.y+18,radius:25,life:.9,kind:'HIVE',owner:enemyIndex});
+      }
+      if(e.type==='reanimator'){
+        if(e.behavior!.mode==='channel'){e.behavior!.modeTime=(e.behavior!.modeTime??0)-dt;}
+        else if(!e.behavior!.used&&e.timer<=0&&this.activeRemaining<12){const corpse=this.enemies.map((enemy,index)=>({enemy,index})).filter(({enemy})=>enemy!==e&&enemy.hp<=0&&enemy.type!=='boss'&&!enemy.behavior?.reanimated&&distance(e,enemy)<175).sort((x,y)=>distance(e,x.enemy)-distance(e,y.enemy))[0];if(corpse){e.behavior!.targetEnemyId=corpse.index;e.behavior!.mode='channel';e.behavior!.modeTime=1.25;e.timer=9;this.attackWarnings.push({x:corpse.enemy.x,y:corpse.enemy.y,radius:0,life:1.25,kind:'REVIVE',owner:enemyIndex});}}
+      }
+      if(e.type==='siege_cannon'&&e.timer<=0){
+        const offsets=[[-62,0],[31,-54],[31,54]];for(const [dx,dy]of offsets)this.attackWarnings.push({x:this.player.x+dx,y:this.player.y+dy,radius:43,life:1.35,kind:'SIEGE',owner:enemyIndex});e.timer=6.4;
+      }
       if(e.type==='hopper'&&e.behavior!.mode==='windup'&&e.behavior!.landing&&!e.behavior!.alerted){const landing=e.behavior!.landing;this.attackWarnings.push({x:landing.x,y:landing.y,radius:48,life:.98,kind:'HOPPER',owner:enemyIndex});e.behavior!.alerted=true;}
       let moveX=intent.velocity.x,moveY=intent.velocity.y;
       // Preserve readable silhouettes when pursuers converge on the same route.
@@ -188,7 +230,7 @@ export class Game {
       if (d < CONFIG.playerRadius + e.radius) this.die('CONTACT / 敵との接触');
     }
     const tetherPairs=new Map<number,Enemy[]>();for(const enemy of this.enemies)if(enemy.hp>0&&enemy.type==='tether_guard'&&enemy.squad!==undefined)tetherPairs.set(enemy.squad,[...(tetherPairs.get(enemy.squad)??[]),enemy]);for(const pair of tetherPairs.values())if(pair.length===2&&distance(pair[0],pair[1])<340){const a=pair[0],b=pair[1],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((this.player.x-a.x)*dx+(this.player.y-a.y)*dy)/(dx*dx+dy*dy))),nearest={x:a.x+t*dx,y:a.y+t*dy};if(distance(nearest,this.player)<CONFIG.playerRadius+8)this.die('TETHER LINE / 連結防衛線');}
-    const bulletWalls=[...this.layout.walls,...this.hazards.filter(h=>h.active&&h.source.type==='moving_wall').map(h=>h.rect),...this.enemyFields.filter(field=>field.kind!=='mine').map(field=>field.rect)];
+    const bulletWalls=[...this.layout.walls,...this.hazards.filter(h=>h.active&&h.source.type==='moving_wall').map(h=>h.rect),...this.enemyFields.filter(field=>field.kind!=='mine'&&field.kind!=='web').map(field=>field.rect)];
     for (const b of this.bullets) {
       if (!b.active) continue; b.age += dt;
       if (b.owner === 'player' && distance(b, this.player) > CONFIG.playerRadius + b.radius + 6) b.armed = true;
@@ -214,12 +256,12 @@ export class Game {
         if (!b.active) break;
         if (b.owner === 'player') for (const e of this.enemies) {
           const hitScale=1+.2*this.stacks('target')+(b.age<1?.1*this.stacks('pilot'):0)+(e.armor?.15*this.stacks('breach'):0);
-          if (e.hp <= 0 || distance(b, e) > b.radius + e.radius * hitScale) continue;
+          if (e.hp <= 0 || e.type==='burrower'&&e.behavior?.mode==='burrow' || distance(b, e) > b.radius + e.radius * hitScale) continue;
           if(e.type==='phase_shift'&&e.behavior?.mode==='phase')continue;
           e.hit = .18;
           if(e.type==='front_shield'&&e.behavior?.heading){const incoming={x:-b.vx/Math.max(1,Math.hypot(b.vx,b.vy)),y:-b.vy/Math.max(1,Math.hypot(b.vx,b.vy))},normal=e.behavior.heading;if(incoming.x*normal.x+incoming.y*normal.y>.45){const dot=b.vx*normal.x+b.vy*normal.y;b.vx-=2*dot*normal.x;b.vy-=2*dot*normal.y;b.x=e.x+normal.x*(e.radius+b.radius+2);b.y=e.y+normal.y*(e.radius+b.radius+2);b.armed=true;b.reflections++;this.reflectionCount++;this.effects.push({x:e.x,y:e.y,age:.35,color:'#8ed5e7',text:'SHIELD'});break;}}
           if (e.armor) {
-            e.armor = false; const len = Math.max(.01, distance(b, e)); const nx = (b.x - e.x) / len, ny = (b.y - e.y) / len; const dot = b.vx * nx + b.vy * ny;
+            e.armor = false;if(e.behavior?.guardTime!==undefined)e.behavior.guardTime=undefined; const len = Math.max(.01, distance(b, e)); const nx = (b.x - e.x) / len, ny = (b.y - e.y) / len; const dot = b.vx * nx + b.vy * ny;
             b.vx -= 2 * dot * nx; b.vy -= 2 * dot * ny;
             const slow = Math.pow(.75, this.stacks('armor'))*Math.pow(.9,this.stacks('control')); b.vx *= slow; b.vy *= slow;
             const radius = e.radius * hitScale + b.radius + 1;
@@ -242,7 +284,33 @@ export class Game {
     for(const field of this.enemyFields){field.arm=Math.max(0,(field.arm??0)-dt);field.life-=dt;const owner=this.enemies[field.owner];if(field.life<=0||!owner||owner.hp<=0&&field.kind==='mine')field.life=0;else if(field.kind==='mine'&&field.arm===0&&circleRect(this.player,CONFIG.playerRadius,field.rect)){this.die('MINE / 地雷');field.life=0;}}
     this.enemyFields=this.enemyFields.filter(field=>field.life>0);
     for(const decoy of this.enemyDecoys){decoy.life-=dt;const owner=this.enemies[decoy.owner];if(!owner||owner.hp<=0)decoy.life=0;}this.enemyDecoys=this.enemyDecoys.filter(decoy=>decoy.life>0);
-    for(const warning of this.attackWarnings){warning.life-=dt;if(warning.life<=0){if(warning.kind==='SNIPER'){const bullet=this.addBullet(warning.x,warning.y,warning.angle??0,'enemy');if(bullet){bullet.vx=Math.cos(warning.angle??0)*330;bullet.vy=Math.sin(warning.angle??0)*330;bullet.source='tracking_sniper';}}else if(warning.kind==='BURST'){const owner=this.enemies[warning.owner];if(owner?.hp>0){const angle=warning.angle??0,bullet=this.addBullet(owner.x+Math.cos(angle)*(owner.radius+7),owner.y+Math.sin(angle)*(owner.radius+7),angle,'enemy');if(bullet)bullet.source='burst_gunner';owner.behavior!.mode='burst';owner.behavior!.shotsLeft=4;owner.behavior!.modeTime=.14;}}else if(warning.kind==='TRIPLE_GUNNER'){const owner=this.enemies[warning.owner];if(owner?.hp>0)for(const offset of[-.2,0,.2]){const angle=(warning.angle??0)+offset,bullet=this.addBullet(owner.x+Math.cos(angle)*(owner.radius+7),owner.y+Math.sin(angle)*(owner.radius+7),angle,'enemy');if(bullet)bullet.source='triple_gunner';}}else if(warning.kind==='SHOCKWAVE'){const owner=this.enemies[warning.owner];if(owner&&distance(this.player,owner)<warning.radius+CONFIG.playerRadius&&Math.abs(Math.atan2(Math.sin(Math.atan2(this.player.y-owner.y,this.player.x-owner.x)-(warning.angle??0)),Math.cos(Math.atan2(this.player.y-owner.y,this.player.x-owner.x)-(warning.angle??0))))>.42)this.die('SHOCKWAVE / 衝撃波');}else if(['MORTAR','ARC','HOPPER','HUNKER SLAM'].includes(warning.kind)&&distance(this.player,warning)<warning.radius+CONFIG.playerRadius)this.die(`${warning.kind} / 爆発範囲`);}}
+    for(const warning of this.attackWarnings){
+      warning.life-=dt;if(warning.life>0)continue;
+      const owner=this.enemies[warning.owner];
+      if(warning.kind==='SNIPER'&&owner?.hp>0){const bullet=this.addBullet(warning.x,warning.y,warning.angle??0,'enemy');if(bullet){bullet.vx=Math.cos(warning.angle??0)*330;bullet.vy=Math.sin(warning.angle??0)*330;bullet.source='tracking_sniper';}}
+      else if(warning.kind==='BURST'&&owner?.hp>0){const angle=warning.angle??0,bullet=this.addBullet(owner.x+Math.cos(angle)*(owner.radius+7),owner.y+Math.sin(angle)*(owner.radius+7),angle,'enemy');if(bullet)bullet.source='burst_gunner';owner.behavior!.mode='burst';owner.behavior!.shotsLeft=4;owner.behavior!.modeTime=.14;}
+      else if(warning.kind==='TRIPLE_GUNNER'&&owner?.hp>0)for(const offset of[-.2,0,.2]){const angle=(warning.angle??0)+offset,bullet=this.addBullet(owner.x+Math.cos(angle)*(owner.radius+7),owner.y+Math.sin(angle)*(owner.radius+7),angle,'enemy');if(bullet)bullet.source='triple_gunner';}
+      else if(warning.kind==='DUELIST'&&owner?.hp>0)for(const offset of[-.13,.13]){const angle=(warning.angle??0)+offset,bullet=this.addBullet(owner.x+Math.cos(angle)*(owner.radius+7),owner.y+Math.sin(angle)*(owner.radius+7),angle,'enemy');if(bullet){bullet.vx*=1.22;bullet.vy*=1.22;bullet.source='duelist';}owner.behavior!.mode='cooldown';}
+      else if(warning.kind==='SENTINEL'&&owner?.hp>0){const angle=warning.angle??0,bullet=this.addBullet(owner.x+Math.cos(angle)*(owner.radius+7),owner.y+Math.sin(angle)*(owner.radius+7),angle,'enemy');if(bullet){bullet.vx*=1.12;bullet.vy*=1.12;bullet.source='sentinel';}owner.behavior!.mode='cooldown';}
+      else if(warning.kind==='SHOCKWAVE'){if(owner&&distance(this.player,owner)<warning.radius+CONFIG.playerRadius&&Math.abs(Math.atan2(Math.sin(Math.atan2(this.player.y-owner.y,this.player.x-owner.x)-(warning.angle??0)),Math.cos(Math.atan2(this.player.y-owner.y,this.player.x-owner.x)-(warning.angle??0))))>.42)this.die('SHOCKWAVE / 衝撃波');}
+      else if(warning.kind==='BOMBER'&&owner?.hp>0){
+        if(distance(this.player,owner)<warning.radius+CONFIG.playerRadius)this.die('BOMBER / 爆発範囲');
+        for(const victim of this.enemies)if(victim!==owner&&victim.hp>0&&distance(victim,owner)<warning.radius*.72&&!victim.armor){victim.hp--;if(victim.hp<=0)this.onEnemyKilled(victim,'standard');}
+        owner.hp=0;this.effects.push({x:owner.x,y:owner.y,age:.75,color:'#ffc17e',text:'DETONATED'});this.onEnemyKilled(owner,'standard');
+      }
+      else if(warning.kind==='BEAM'&&owner?.hp>0){
+        const angle=warning.angle??0,ux=Math.cos(angle),uy=Math.sin(angle),along=(this.player.x-owner.x)*ux+(this.player.y-owner.y)*uy;
+        if(along>=0&&along<1400){const nearest={x:owner.x+ux*along,y:owner.y+uy*along},blocked=along>14&&this.layout.walls.some(wall=>{const steps=Math.ceil(along/16);for(let i=1;i<steps;i++){const p={x:owner.x+ux*along*i/steps,y:owner.y+uy*along*i/steps};if(circleRect(p,4,wall))return true;}return false;});if(!blocked&&distance(this.player,nearest)<warning.radius+CONFIG.playerRadius)this.die('BEAM / 直線攻撃');}
+        owner.behavior!.mode='cooldown';
+      }
+      else if(warning.kind==='WEB'&&owner?.hp>0){this.enemyFields.push({rect:{x:warning.x-48,y:warning.y-48,w:96,h:96},life:3.2,owner:warning.owner,kind:'web'});this.effects.push({x:warning.x,y:warning.y,age:.7,color:'#b8db82',text:'WEB FIELD'});}
+      else if(warning.kind==='HIVE'&&owner?.hp>0&&this.activeRemaining<12){
+        const p=warning, b=this.layout.bounds;if(p.x>b.x+30&&p.x<b.x+b.w-30&&p.y>b.y+30&&p.y<b.y+b.h-30&&!this.layout.walls.some(wall=>circleRect(p,12,wall)))this.enemies.push({...makeEnemy({x:p.x,y:p.y,type:'dasher'}),radius:9,hp:1});
+      }
+      else if(warning.kind==='REVIVE'&&owner?.hp>0){const corpse=this.enemies[owner.behavior!.targetEnemyId??-1];if(this.activeRemaining<12&&corpse&&corpse.hp<=0&&corpse.type!=='boss'&&!corpse.behavior?.reanimated){corpse.hp=1;corpse.armor=false;corpse.timer=2;corpse.behavior={reanimated:true};this.effects.push({x:corpse.x,y:corpse.y,age:.8,color:'#ccb4ea',text:'REANIMATED'});owner.behavior!.used=true;}owner.behavior!.mode='recover';}
+      else if(warning.kind==='SHOCKWAVE'){/* resolved above */}
+      else if(['MORTAR','ARC','HOPPER','HUNKER SLAM','SIEGE'].includes(warning.kind)&&(warning.kind!=='SIEGE'||owner?.hp>0)&&distance(this.player,warning)<warning.radius+CONFIG.playerRadius)this.die(`${warning.kind} / 爆発範囲`);
+    }
     this.attackWarnings=this.attackWarnings.filter(warning=>warning.life>0);
     this.updateReinforcements(dt);
     this.effects = this.effects.filter(e => (e.age -= dt) > 0);

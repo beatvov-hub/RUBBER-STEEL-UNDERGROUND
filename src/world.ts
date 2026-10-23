@@ -112,7 +112,16 @@ function composeFloorEnemies(all:EnemySpawn[]) {
   const enemies=all.slice(0,INITIAL_ENEMY_CAP), reinforcements=groupReinforcements(all.slice(INITIAL_ENEMY_CAP));
   return {enemies,reinforcements:reinforcements.length?reinforcements:undefined};
 }
-function capSpecialEnemies(spawns:EnemySpawn[]){const used=new Map<EnemyType,number>();for(const enemy of spawns){const definition=enemyDefinition(enemy.type),count=used.get(enemy.type)??0;if(count>=definition.maxPerFloor){const fallback=(['basic','shooter','armored'] as EnemyType[]).find(type=>(used.get(type)??0)<enemyDefinition(type).maxPerFloor)??'basic';enemy.type=fallback;used.set(fallback,(used.get(fallback)??0)+1);}else used.set(enemy.type,count+1);}}
+export function capSpecialEnemies(spawns:EnemySpawn[]){
+  const used=new Map<EnemyType,number>();let advanced=0;
+  for(const enemy of spawns){
+    const definition=enemyDefinition(enemy.type),count=used.get(enemy.type)??0,isAdvanced=definition.category==='special';
+    if(count>=definition.maxPerFloor||isAdvanced&&advanced>=3){
+      const fallback=(['basic','shooter','armored'] as EnemyType[]).find(type=>(used.get(type)??0)<enemyDefinition(type).maxPerFloor)??'basic';
+      enemy.type=fallback;used.set(fallback,(used.get(fallback)??0)+1);
+    }else{used.set(enemy.type,count+1);if(isAdvanced)advanced++;}
+  }
+}
 export function reachable(floor:Floor, blocked:Rect[]=[]):Set<string> {
   const grid=12,r=CONFIG.playerRadius+2,b=floor.bounds,walls=[...floor.walls,...blocked];
   const start=entryOf(b), sx=Math.round(start.x/grid),sy=Math.round(start.y/grid), key=(x:number,y:number)=>`${x},${y}`;
@@ -205,6 +214,8 @@ function candidate(stage:number,number:number,attempt:number):Floor {
     const groupStart=typeIndex,groupEnd=groupStart+3;typeIndex=groupEnd;
     // Preserve each floor's enemy mix, but keep at least two light targets in a TRIPLE opportunity.
     types=balanceClusterTypes(types,groupStart);
+    // A close, entry-visible TRIPLE cluster may contain at most one new high-pressure archetype.
+    let specialistCount=0;for(let i=groupStart;i<Math.min(groupEnd,types.length);i++)if(enemyDefinition(types[i]).category==='special'){specialistCount++;if(specialistCount>1)types[i]='basic';}
     const groupTypes=types.slice(groupStart,groupEnd);
     if(groupTypes.length!==3||groupTypes.includes('boss')){for(const type of groupTypes)placeSingle(type);continue;}
     let placed=false,bestEntryCluster:{positions:Vec[];visible:number;distance:number}|undefined;

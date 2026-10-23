@@ -23,11 +23,12 @@ try{
   assert.match(await page.locator('#debug-stats').textContent(),/REBOUNDS S\/T\/H/);
   assert.match(await page.locator('#debug-stats').textContent(),/RENDER .*ms/);
   assert.match(await page.locator('.vital-label').textContent(),/THUNDER/);
-  await page.locator('#debug-enemies').selectOption(['dasher','phase_shift','ricochet_gunner']);
+  const newSpecials=['bomber','burrower','sentinel','beam_weaver','guardian','hive_caller','webber','duelist','reanimator','siege_cannon'];
+  await page.locator('#debug-enemies').selectOption(newSpecials);
   await page.locator('#debug-spawn-enemies').click();await page.waitForTimeout(200);
   const enemyStats=await page.locator('#debug-stats').textContent();
-  for(const type of ['dasher','phase_shift','ricochet_gunner'])assert.ok(enemyStats.includes(type),`debug enemy test omitted ${type}: ${enemyStats}`);
-  await page.screenshot({path:'artifacts/enemy-debug-test.png'});
+  for(const type of newSpecials)assert.ok(enemyStats.includes(type),`debug enemy test omitted ${type}: ${enemyStats}`);
+  await page.screenshot({path:'artifacts/new-special-enemies.png'});
   await page.locator('#debug-stage').fill('50');await page.locator('#debug-floor').fill('10');await page.locator('#debug-jump').click();
   await page.keyboard.press('2');
   const bounds=await page.locator('#game').boundingBox();
