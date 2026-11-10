@@ -15,6 +15,7 @@
     "test:playthrough": "tsx scripts/playthrough.ts",
     "test:browser": "node scripts/smoke.mjs",
     "test:mobile": "node scripts/mobile-smoke.mjs",
+    "test:gamepad": "node scripts/gamepad-smoke.mjs",
     "test:desktop": "node scripts/desktop-smoke.mjs",
     "test:debug": "node scripts/debug-smoke.mjs",
     "verify:content": "tsx scripts/verify-content.ts"

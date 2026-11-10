@@ -923,3 +923,6 @@ h1 {
 .debug-panel #debug-enemies { width:min(220px,45vw); height:64px; }
 .debug-panel label { display:flex; align-items:center; gap:4px; }
 .debug-panel output { flex:1 1 100%; overflow-wrap:anywhere; line-height:1.5; }
+
+/* Visible focus is essential when navigating menus with a controller. */
+.overlay :is(button, input):focus-visible { outline: 3px solid #e8f5b4; outline-offset: 3px; }
